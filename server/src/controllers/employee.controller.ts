@@ -1,7 +1,12 @@
 import type { NextFunction, Request, Response } from 'express'
 import { ZodError } from 'zod'
 import { HttpError, type FieldError } from '../middleware/error.middleware.js'
-import { getEmployee, listEmployees } from '../services/employee.service.js'
+import {
+  EmployeeDuplicateError,
+  EmployeeReferenceNotFoundError,
+} from '../repositories/employee.repository.js'
+import { createEmployee, getEmployee, listEmployees } from '../services/employee.service.js'
+import { createEmployeeSchema } from '../validators/createEmployee.js'
 import { employeeIdentifierSchema } from '../validators/employeeIdentifier.js'
 import { employeeListQuerySchema } from '../validators/employeeListQuery.js'
 
@@ -56,6 +61,48 @@ export async function getEmployeeByIdentifier(
 
     response.status(200).json({ data: employee })
   } catch (error: unknown) {
+    next(error)
+  }
+}
+
+export async function postEmployee(
+  request: Request,
+  response: Response,
+  next: NextFunction,
+): Promise<void> {
+  const parsed = createEmployeeSchema.safeParse(request.body)
+
+  if (!parsed.success) {
+    next(new HttpError(400, 'Invalid request body', fieldErrors(parsed.error)))
+    return
+  }
+
+  try {
+    const employee = await createEmployee(parsed.data)
+    response.status(201).json({ data: employee })
+  } catch (error: unknown) {
+    if (error instanceof EmployeeReferenceNotFoundError) {
+      next(
+        new HttpError(
+          404,
+          error.message,
+          error.fields.map((field) => ({ field, message: 'Record not found' })),
+        ),
+      )
+      return
+    }
+
+    if (error instanceof EmployeeDuplicateError) {
+      next(
+        new HttpError(
+          409,
+          error.message,
+          error.fields.map((field) => ({ field, message: 'Already exists' })),
+        ),
+      )
+      return
+    }
+
     next(error)
   }
 }

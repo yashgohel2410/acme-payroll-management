@@ -324,3 +324,128 @@ describe('GET /api/employees/:id', () => {
     expect(fraction.body.error.fields[0]?.field).toBe('id')
   })
 })
+
+describe('POST /api/employees', () => {
+  async function references(): Promise<{
+    departmentId: number
+    countryId: number
+    currencyId: number
+  }> {
+    const department = await prisma.department.findUniqueOrThrow({ where: { name: 'Engineering' } })
+    const country = await prisma.country.findUniqueOrThrow({ where: { isoCode: 'IN' } })
+    const currency = await prisma.currency.findUniqueOrThrow({ where: { code: 'INR' } })
+
+    return {
+      departmentId: department.id,
+      countryId: country.id,
+      currencyId: currency.id,
+    }
+  }
+
+  function payload(
+    refs: { departmentId: number; countryId: number; currencyId: number },
+    overrides: Record<string, unknown> = {},
+  ): Record<string, unknown> {
+    return {
+      employeeCode: 'NEW001',
+      firstName: 'Asha',
+      lastName: 'Menon',
+      email: 'asha.menon@acme.test',
+      phone: '+911234567890',
+      designation: 'Software Engineer',
+      dateOfJoining: '2024-01-15',
+      employmentStatus: 'ACTIVE',
+      amount: 4_500_000,
+      effectiveFrom: '2024-01-15',
+      ...refs,
+      ...overrides,
+    }
+  }
+
+  it('creates an employee and initial salary', async () => {
+    const body = payload(await references())
+    const response = await request(app).post('/api/employees').send(body)
+
+    expect(response.status).toBe(201)
+    expect(response.body.data).toMatchObject({
+      employeeCode: 'NEW001',
+      email: 'asha.menon@acme.test',
+      department: { name: 'Engineering' },
+      country: { isoCode: 'IN' },
+      salary: {
+        amount: 4_500_000,
+        effectiveTo: null,
+        currency: { code: 'INR' },
+      },
+    })
+
+    const stored = await prisma.salary.findFirst({
+      where: { employee: { employeeCode: 'NEW001' } },
+    })
+    expect(stored?.amount).toBe(4_500_000)
+  })
+
+  it('returns 409 when the email already exists', async () => {
+    const refs = await references()
+    const response = await request(app)
+      .post('/api/employees')
+      .send(payload(refs, { employeeCode: 'NEW002', email: 'asha.menon@acme.test' }))
+
+    expect(response.status).toBe(409)
+    expect(response.body.error.fields.map((field: { field: string }) => field.field)).toContain('email')
+  })
+
+  it('returns 409 when the employee code already exists', async () => {
+    const refs = await references()
+    const response = await request(app)
+      .post('/api/employees')
+      .send(payload(refs, { employeeCode: 'NEW001', email: 'other.person@acme.test' }))
+
+    expect(response.status).toBe(409)
+    expect(response.body.error.fields.map((field: { field: string }) => field.field)).toContain(
+      'employeeCode',
+    )
+  })
+
+  it('returns 404 when department, country, or currency does not exist', async () => {
+    const response = await request(app)
+      .post('/api/employees')
+      .send(
+        payload(await references(), {
+          employeeCode: 'NEW404',
+          email: 'missing.refs@acme.test',
+          departmentId: 999_999,
+          countryId: 999_999,
+          currencyId: 999_999,
+        }),
+      )
+
+    expect(response.status).toBe(404)
+    expect(response.body.error.fields.map((field: { field: string }) => field.field)).toEqual(
+      expect.arrayContaining(['departmentId', 'countryId', 'currencyId']),
+    )
+    const stored = await prisma.employee.findUnique({ where: { employeeCode: 'NEW404' } })
+    expect(stored).toBeNull()
+  })
+
+  it('rejects an invalid request body', async () => {
+    const refs = await references()
+    const response = await request(app)
+      .post('/api/employees')
+      .send(
+        payload(refs, {
+          employeeCode: '',
+          email: 'not-an-email',
+          amount: 12.5,
+          dateOfJoining: '15-01-2024',
+          employmentStatus: 'UNKNOWN',
+        }),
+      )
+
+    expect(response.status).toBe(400)
+    expect(response.body.error.message).toBe('Invalid request body')
+    expect(response.body.error.fields.map((field: { field: string }) => field.field)).toEqual(
+      expect.arrayContaining(['employeeCode', 'email', 'amount', 'dateOfJoining', 'employmentStatus']),
+    )
+  })
+})

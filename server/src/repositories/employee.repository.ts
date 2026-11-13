@@ -1,6 +1,7 @@
 import { Prisma } from '../generated/prisma/client.js'
 import type { EmploymentStatus } from '../generated/prisma/enums.js'
 import { prisma } from '../config/database.js'
+import type { CreateEmployeeInput } from '../validators/createEmployee.js'
 import type { EmployeeListQuery } from '../validators/employeeListQuery.js'
 
 export type ListedEmployee = {
@@ -308,5 +309,169 @@ export async function findEmployee(
     currentSalary,
     salaryHistory: row.salaries,
     salaryRevisions: row.salaryRevisions,
+  }
+}
+
+export type ReferenceField = 'departmentId' | 'countryId' | 'currencyId'
+export type DuplicateField = 'employeeCode' | 'email'
+
+export class EmployeeReferenceNotFoundError extends Error {
+  readonly fields: readonly ReferenceField[]
+
+  constructor(fields: readonly ReferenceField[]) {
+    super('Referenced record was not found')
+    this.name = 'EmployeeReferenceNotFoundError'
+    this.fields = fields
+  }
+}
+
+export class EmployeeDuplicateError extends Error {
+  readonly fields: readonly DuplicateField[]
+
+  constructor(fields: readonly DuplicateField[]) {
+    super('Employee code or email already exists')
+    this.name = 'EmployeeDuplicateError'
+    this.fields = fields
+  }
+}
+
+export type CreatedEmployee = Omit<ListedEmployee, 'currentSalary'> & {
+  salary: SalaryRecord
+}
+
+function duplicateFields(
+  existing: { employeeCode: string; email: string },
+  input: CreateEmployeeInput,
+): DuplicateField[] {
+  const fields: DuplicateField[] = []
+
+  if (existing.employeeCode === input.employeeCode) {
+    fields.push('employeeCode')
+  }
+
+  if (existing.email.toLowerCase() === input.email) {
+    fields.push('email')
+  }
+
+  return fields.length > 0 ? fields : ['employeeCode', 'email']
+}
+
+function isUniqueConstraintError(error: unknown): boolean {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    (error as { code?: unknown }).code === 'P2002'
+  )
+}
+
+export async function createEmployeeWithSalary(input: CreateEmployeeInput): Promise<CreatedEmployee> {
+  try {
+    return await prisma.$transaction(async (transaction) => {
+      const [department, country, currency, existing] = await Promise.all([
+        transaction.department.findUnique({
+          where: { id: input.departmentId },
+          select: { id: true, name: true },
+        }),
+        transaction.country.findUnique({
+          where: { id: input.countryId },
+          select: { id: true, name: true, isoCode: true },
+        }),
+        transaction.currency.findUnique({
+          where: { id: input.currencyId },
+          select: currencySelect,
+        }),
+        transaction.employee.findFirst({
+          where: {
+            OR: [{ employeeCode: input.employeeCode }, { email: input.email }],
+          },
+          select: { employeeCode: true, email: true },
+        }),
+      ])
+
+      const missing: ReferenceField[] = []
+      if (department === null) {
+        missing.push('departmentId')
+      }
+      if (country === null) {
+        missing.push('countryId')
+      }
+      if (currency === null) {
+        missing.push('currencyId')
+      }
+      if (missing.length > 0) {
+        throw new EmployeeReferenceNotFoundError(missing)
+      }
+
+      if (existing !== null) {
+        throw new EmployeeDuplicateError(duplicateFields(existing, input))
+      }
+
+      if (department === null || country === null || currency === null) {
+        throw new EmployeeReferenceNotFoundError(missing)
+      }
+
+      const employee = await transaction.employee.create({
+        data: {
+          employeeCode: input.employeeCode,
+          firstName: input.firstName,
+          lastName: input.lastName,
+          email: input.email,
+          phone: input.phone ?? null,
+          designation: input.designation,
+          dateOfJoining: input.dateOfJoining,
+          employmentStatus: input.employmentStatus,
+          departmentId: department.id,
+          countryId: country.id,
+        },
+        select: {
+          id: true,
+          employeeCode: true,
+          firstName: true,
+          lastName: true,
+          email: true,
+          phone: true,
+          dateOfJoining: true,
+          designation: true,
+          employmentStatus: true,
+        },
+      })
+
+      const salary = await transaction.salary.create({
+        data: {
+          employeeId: employee.id,
+          amount: input.amount,
+          currencyId: currency.id,
+          effectiveFrom: input.effectiveFrom,
+          effectiveTo: null,
+        },
+        select: {
+          id: true,
+          amount: true,
+          effectiveFrom: true,
+          effectiveTo: true,
+        },
+      })
+
+      return {
+        ...employee,
+        country,
+        department,
+        salary: {
+          ...salary,
+          currency,
+        },
+      }
+    })
+  } catch (error: unknown) {
+    if (error instanceof EmployeeReferenceNotFoundError || error instanceof EmployeeDuplicateError) {
+      throw error
+    }
+
+    if (isUniqueConstraintError(error)) {
+      throw new EmployeeDuplicateError(['employeeCode', 'email'])
+    }
+
+    throw error
   }
 }

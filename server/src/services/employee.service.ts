@@ -1,10 +1,13 @@
 import {
+  createEmployeeWithSalary,
   findEmployee,
   findEmployeePage,
+  type CreatedEmployee,
   type EmployeeDetails,
   type EmployeeLookup,
   type ListedEmployee,
 } from '../repositories/employee.repository.js'
+import type { CreateEmployeeInput } from '../validators/createEmployee.js'
 import type { EmployeeListQuery } from '../validators/employeeListQuery.js'
 
 export type EmployeeListResponse = {
@@ -34,4 +37,8 @@ export async function listEmployees(query: EmployeeListQuery): Promise<EmployeeL
 
 export async function getEmployee(lookup: EmployeeLookup): Promise<EmployeeDetails | null> {
   return findEmployee(lookup, new Date())
+}
+
+export async function createEmployee(input: CreateEmployeeInput): Promise<CreatedEmployee> {
+  return createEmployeeWithSalary(input)
 }
