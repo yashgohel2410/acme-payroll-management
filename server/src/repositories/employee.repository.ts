@@ -333,6 +333,13 @@ export class EmployeeNotFoundError extends Error {
   }
 }
 
+export class EmployeeAlreadyInactiveError extends Error {
+  constructor() {
+    super('Employee is already inactive')
+    this.name = 'EmployeeAlreadyInactiveError'
+  }
+}
+
 export class EmployeeDuplicateError extends Error {
   readonly fields: readonly DuplicateField[]
 
@@ -584,4 +591,43 @@ export async function updateEmployeeRecord(
 
     throw error
   }
+}
+
+export async function deactivateEmployeeRecord(lookup: EmployeeLookup): Promise<UpdatedEmployee> {
+  return prisma.$transaction(async (transaction) => {
+    const current = await transaction.employee.findFirst({
+      where: lookupWhere(lookup),
+      select: { id: true, employmentStatus: true },
+    })
+
+    if (current === null) {
+      throw new EmployeeNotFoundError()
+    }
+
+    if (current.employmentStatus === 'INACTIVE') {
+      throw new EmployeeAlreadyInactiveError()
+    }
+
+    return transaction.employee.update({
+      where: { id: current.id },
+      data: { employmentStatus: 'INACTIVE' },
+      select: {
+        id: true,
+        employeeCode: true,
+        firstName: true,
+        lastName: true,
+        email: true,
+        phone: true,
+        dateOfJoining: true,
+        designation: true,
+        employmentStatus: true,
+        country: {
+          select: { id: true, name: true, isoCode: true },
+        },
+        department: {
+          select: { id: true, name: true },
+        },
+      },
+    })
+  })
 }

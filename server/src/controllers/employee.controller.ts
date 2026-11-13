@@ -2,11 +2,18 @@ import type { NextFunction, Request, Response } from 'express'
 import { ZodError } from 'zod'
 import { HttpError, type FieldError } from '../middleware/error.middleware.js'
 import {
+  EmployeeAlreadyInactiveError,
   EmployeeDuplicateError,
   EmployeeNotFoundError,
   EmployeeReferenceNotFoundError,
 } from '../repositories/employee.repository.js'
-import { createEmployee, getEmployee, listEmployees, updateEmployee } from '../services/employee.service.js'
+import {
+  createEmployee,
+  deactivateEmployee,
+  getEmployee,
+  listEmployees,
+  updateEmployee,
+} from '../services/employee.service.js'
 import { createEmployeeSchema } from '../validators/createEmployee.js'
 import { updateEmployeeSchema } from '../validators/updateEmployee.js'
 import { employeeIdentifierSchema } from '../validators/employeeIdentifier.js'
@@ -158,6 +165,43 @@ export async function putEmployee(
           error.message,
           error.fields.map((field) => ({ field, message: 'Already exists' })),
         ),
+      )
+      return
+    }
+
+    next(error)
+  }
+}
+
+export async function deleteEmployee(
+  request: Request,
+  response: Response,
+  next: NextFunction,
+): Promise<void> {
+  const routeId = request.params.id
+  const identifier = employeeIdentifierSchema.safeParse(
+    typeof routeId === 'string' ? routeId : undefined,
+  )
+
+  if (!identifier.success) {
+    next(new HttpError(400, 'Invalid employee identifier', fieldErrors(identifier.error)))
+    return
+  }
+
+  try {
+    const employee = await deactivateEmployee(identifier.data)
+    response.status(200).json({ data: employee })
+  } catch (error: unknown) {
+    if (error instanceof EmployeeNotFoundError) {
+      next(new HttpError(404, error.message))
+      return
+    }
+
+    if (error instanceof EmployeeAlreadyInactiveError) {
+      next(
+        new HttpError(409, error.message, [
+          { field: 'employmentStatus', message: 'Already inactive' },
+        ]),
       )
       return
     }

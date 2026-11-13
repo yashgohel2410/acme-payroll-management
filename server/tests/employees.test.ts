@@ -539,3 +539,60 @@ describe('PUT /api/employees/:id', () => {
     expect(after.departmentId).toBe(before.departmentId)
   })
 })
+
+describe('DELETE /api/employees/:id', () => {
+  it('deactivates an employee and keeps salary history available', async () => {
+    const before = await prisma.employee.findUniqueOrThrow({
+      where: { employeeCode: 'LST014' },
+      include: { salaries: true, salaryRevisions: true },
+    })
+
+    const response = await request(app).delete(`/api/employees/${before.id}`)
+
+    expect(response.status).toBe(200)
+    expect(response.body.data).toMatchObject({
+      id: before.id,
+      employeeCode: 'LST014',
+      employmentStatus: 'INACTIVE',
+      department: { name: 'Finance' },
+      country: { isoCode: 'US' },
+    })
+
+    const stored = await prisma.employee.findUniqueOrThrow({
+      where: { id: before.id },
+      include: { salaries: true, salaryRevisions: true },
+    })
+    expect(stored.employmentStatus).toBe('INACTIVE')
+    expect(stored.salaries.map((salary) => salary.amount)).toEqual(before.salaries.map((salary) => salary.amount))
+    expect(stored.salaryRevisions).toHaveLength(before.salaryRevisions.length)
+
+    const details = await request(app).get('/api/employees/LST014')
+    expect(details.status).toBe(200)
+    expect(details.body.data.employmentStatus).toBe('INACTIVE')
+    expect(details.body.data.salaryHistory).toHaveLength(before.salaries.length)
+    expect(details.body.data.currentSalary.amount).toBe(before.salaries[0]?.amount)
+
+    const listed = await request(app).get('/api/employees').query({ search: 'LST014', employmentStatus: 'INACTIVE' })
+    expect(listed.status).toBe(200)
+    expect(listed.body.data.map((employee: { employeeCode: string }) => employee.employeeCode)).toContain('LST014')
+  })
+
+  it('returns 404 when the employee does not exist', async () => {
+    const response = await request(app).delete('/api/employees/999999')
+
+    expect(response.status).toBe(404)
+    expect(response.body.error.message).toBe('Employee not found')
+  })
+
+  it('returns 409 when the employee is already inactive', async () => {
+    const before = await prisma.employee.findUniqueOrThrow({ where: { employeeCode: 'LST023' } })
+    const response = await request(app).delete('/api/employees/LST023')
+
+    expect(response.status).toBe(409)
+    expect(response.body.error.message).toBe('Employee is already inactive')
+    expect(response.body.error.fields).toEqual([{ field: 'employmentStatus', message: 'Already inactive' }])
+
+    const after = await prisma.employee.findUniqueOrThrow({ where: { id: before.id } })
+    expect(after.employmentStatus).toBe('INACTIVE')
+  })
+})

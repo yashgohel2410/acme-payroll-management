@@ -1,5 +1,6 @@
 import {
   createEmployeeWithSalary,
+  deactivateEmployeeRecord,
   findEmployee,
   findEmployeePage,
   updateEmployeeRecord,
@@ -51,4 +52,8 @@ export async function updateEmployee(
   input: UpdateEmployeeInput,
 ): Promise<UpdatedEmployee> {
   return updateEmployeeRecord(lookup, input)
+}
+
+export async function deactivateEmployee(lookup: EmployeeLookup): Promise<UpdatedEmployee> {
+  return deactivateEmployeeRecord(lookup)
 }
