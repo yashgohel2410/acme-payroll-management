@@ -6,3 +6,106 @@ generator client {
 datasource db {
   provider = "sqlite"
 }
+
+enum EmploymentStatus {
+  ACTIVE
+  INACTIVE
+  ON_LEAVE
+  TERMINATED
+}
+
+/// Country used to filter and group employees. Deletion is restricted while employees remain assigned.
+model Country {
+  id        Int        @id @default(autoincrement())
+  name      String
+  isoCode   String     @unique
+  employees Employee[]
+
+  @@index([name])
+}
+
+/// Organizational unit used to filter employees. Deletion is restricted while employees remain assigned.
+model Department {
+  id        Int        @id @default(autoincrement())
+  name      String     @unique
+  employees Employee[]
+}
+
+/// ISO currency. Amounts that reference a currency are stored as integers in that currency's minor units.
+model Currency {
+  id                Int              @id @default(autoincrement())
+  code              String           @unique
+  name              String
+  minorUnitDigits   Int              @default(2)
+  salaries          Salary[]
+  previousRevisions SalaryRevision[] @relation("RevisionPreviousCurrency")
+  updatedRevisions  SalaryRevision[] @relation("RevisionUpdatedCurrency")
+}
+
+/// Employee profile for compensation management. Salary rows and revision history are removed with the employee.
+model Employee {
+  id               Int              @id @default(autoincrement())
+  employeeCode     String           @unique
+  firstName        String
+  lastName         String
+  email            String           @unique
+  phone            String?
+  dateOfJoining    DateTime
+  designation      String
+  employmentStatus EmploymentStatus @default(ACTIVE)
+  countryId        Int
+  country          Country          @relation(fields: [countryId], references: [id], onDelete: Restrict)
+  departmentId     Int
+  department       Department       @relation(fields: [departmentId], references: [id], onDelete: Restrict)
+  salaries         Salary[]
+  salaryRevisions  SalaryRevision[]
+
+  @@index([lastName, firstName])
+  @@index([firstName])
+  @@index([departmentId])
+  @@index([countryId])
+  @@index([employmentStatus])
+  @@index([designation])
+}
+
+/// A salary period for one employee. `amount` is an integer in minor units, such as paise for INR.
+model Salary {
+  id            Int              @id @default(autoincrement())
+  employeeId    Int
+  employee      Employee         @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  amount        Int
+  currencyId    Int
+  currency      Currency         @relation(fields: [currencyId], references: [id], onDelete: Restrict)
+  effectiveFrom DateTime
+  effectiveTo   DateTime?
+  revisions     SalaryRevision[]
+
+  @@index([employeeId])
+  @@index([currencyId])
+  @@index([effectiveFrom])
+  @@index([effectiveTo])
+  @@index([employeeId, effectiveFrom])
+}
+
+/// Audit record of a salary change. Amounts are integers in minor units. History is removed with the employee or salary.
+model SalaryRevision {
+  id                 Int      @id @default(autoincrement())
+  employeeId         Int
+  employee           Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  salaryId           Int
+  salary             Salary   @relation(fields: [salaryId], references: [id], onDelete: Cascade)
+  previousAmount     Int
+  updatedAmount      Int
+  previousCurrencyId Int
+  previousCurrency   Currency @relation("RevisionPreviousCurrency", fields: [previousCurrencyId], references: [id], onDelete: Restrict)
+  updatedCurrencyId  Int
+  updatedCurrency    Currency @relation("RevisionUpdatedCurrency", fields: [updatedCurrencyId], references: [id], onDelete: Restrict)
+  changeReason       String
+  changedAt          DateTime @default(now())
+
+  @@index([employeeId])
+  @@index([salaryId])
+  @@index([changedAt])
+  @@index([previousCurrencyId])
+  @@index([updatedCurrencyId])
+}
