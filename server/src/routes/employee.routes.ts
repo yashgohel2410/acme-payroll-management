@@ -1,6 +1,7 @@
 import { Router } from 'express'
-import { getEmployees } from '../controllers/employee.controller.js'
+import { getEmployeeByIdentifier, getEmployees } from '../controllers/employee.controller.js'
 
 export const employeeRouter = Router()
 
 employeeRouter.get('/', getEmployees)
+employeeRouter.get('/:id', getEmployeeByIdentifier)

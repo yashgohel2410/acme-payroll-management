@@ -93,7 +93,7 @@ beforeAll(async () => {
     })
 
     if (sequence !== 23) {
-      await prisma.salary.create({
+      const currentSalary = await prisma.salary.create({
         data: {
           employeeId: employee.id,
           amount: 5_000_000 + sequence,
@@ -102,6 +102,30 @@ beforeAll(async () => {
           effectiveTo: null,
         },
       })
+
+      if (sequence === 1) {
+        const previousSalary = await prisma.salary.create({
+          data: {
+            employeeId: employee.id,
+            amount: 4_000_000,
+            currencyId: currency.id,
+            effectiveFrom: new Date(Date.UTC(2019, 0, 1)),
+            effectiveTo: new Date(Date.UTC(2019, 11, 31)),
+          },
+        })
+        await prisma.salaryRevision.create({
+          data: {
+            employeeId: employee.id,
+            salaryId: currentSalary.id,
+            previousAmount: previousSalary.amount,
+            updatedAmount: currentSalary.amount,
+            previousCurrencyId: currency.id,
+            updatedCurrencyId: currency.id,
+            changeReason: 'Annual review',
+            changedAt: new Date(Date.UTC(2020, 0, 1)),
+          },
+        })
+      }
     }
   }
 })
@@ -236,5 +260,67 @@ describe('GET /api/employees', () => {
     expect(response.body.error.fields.map((field: { field: string }) => field.field)).toEqual(
       expect.arrayContaining(['page', 'limit', 'sortBy', 'sortOrder', 'employmentStatus', 'departmentId']),
     )
+  })
+})
+
+describe('GET /api/employees/:id', () => {
+  it('returns an employee by database id with salary history', async () => {
+    const listed = readBody((await request(app).get('/api/employees').query({ search: 'LST001' })).body)
+    const employeeId = listed.data[0]?.employeeCode
+    const stored = await prisma.employee.findUnique({ where: { employeeCode: 'LST001' } })
+
+    if (stored === null || employeeId !== 'LST001') {
+      throw new Error('Expected seeded employee LST001')
+    }
+
+    const response = await request(app).get(`/api/employees/${stored.id}`)
+    const body = response.body as {
+      data: {
+        id: number
+        employeeCode: string
+        department: { name: string }
+        country: { isoCode: string }
+        currentSalary: { amount: number; currency: { code: string } } | null
+        salaryHistory: { amount: number; currency: { code: string } }[]
+        salaryRevisions: { changeReason: string; previousCurrency: { code: string } }[]
+      }
+    }
+
+    expect(response.status).toBe(200)
+    expect(body.data.id).toBe(stored.id)
+    expect(body.data.employeeCode).toBe('LST001')
+    expect(body.data.department.name).toBe('Engineering')
+    expect(body.data.country.isoCode).toBe('IN')
+    expect(body.data.currentSalary).toMatchObject({ amount: 5_000_001, currency: { code: 'INR' } })
+    expect(body.data.salaryHistory).toHaveLength(2)
+    expect(body.data.salaryHistory.every((salary) => salary.currency.code === 'INR')).toBe(true)
+    expect(body.data.salaryRevisions[0]?.changeReason).toBe('Annual review')
+  })
+
+  it('returns the same employee by employee code', async () => {
+    const response = await request(app).get('/api/employees/LST001')
+
+    expect(response.status).toBe(200)
+    expect(response.body.data.employeeCode).toBe('LST001')
+  })
+
+  it('returns 404 when the employee does not exist', async () => {
+    const byId = await request(app).get('/api/employees/999999')
+    const byCode = await request(app).get('/api/employees/MISSING1')
+
+    expect(byId.status).toBe(404)
+    expect(byId.body.error.message).toBe('Employee not found')
+    expect(byCode.status).toBe(404)
+    expect(byCode.body.error.message).toBe('Employee not found')
+  })
+
+  it('rejects an invalid employee id', async () => {
+    const zero = await request(app).get('/api/employees/0')
+    const fraction = await request(app).get('/api/employees/1.5')
+
+    expect(zero.status).toBe(400)
+    expect(zero.body.error.message).toBe('Invalid employee identifier')
+    expect(fraction.status).toBe(400)
+    expect(fraction.body.error.fields[0]?.field).toBe('id')
   })
 })

@@ -184,3 +184,129 @@ export async function findEmployeePage(
     employees: rows.map((row) => toListedEmployee(row)),
   }
 }
+
+export type SalaryRecord = {
+  id: number
+  amount: number
+  effectiveFrom: Date
+  effectiveTo: Date | null
+  currency: NonNullable<ListedEmployee['currentSalary']>['currency']
+}
+
+export type SalaryRevisionRecord = {
+  id: number
+  salaryId: number
+  previousAmount: number
+  updatedAmount: number
+  changeReason: string
+  changedAt: Date
+  previousCurrency: SalaryRecord['currency']
+  updatedCurrency: SalaryRecord['currency']
+}
+
+export type EmployeeDetails = Omit<ListedEmployee, 'currentSalary'> & {
+  currentSalary: SalaryRecord | null
+  salaryHistory: SalaryRecord[]
+  salaryRevisions: SalaryRevisionRecord[]
+}
+
+export type EmployeeLookup = {
+  id?: number
+  employeeCode?: string
+}
+
+const currencySelect = {
+  id: true,
+  code: true,
+  name: true,
+  minorUnitDigits: true,
+} as const
+
+function isCurrentSalary(salary: SalaryRecord, asOf: Date): boolean {
+  return (
+    salary.effectiveFrom.getTime() <= asOf.getTime() &&
+    (salary.effectiveTo === null || salary.effectiveTo.getTime() >= asOf.getTime())
+  )
+}
+
+function lookupWhere(lookup: EmployeeLookup): Prisma.EmployeeWhereInput {
+  if (lookup.id !== undefined) {
+    return { id: lookup.id }
+  }
+
+  if (lookup.employeeCode !== undefined) {
+    return { employeeCode: lookup.employeeCode }
+  }
+
+  throw new Error('Employee lookup requires an id or employee code')
+}
+
+export async function findEmployee(
+  lookup: EmployeeLookup,
+  asOf: Date,
+): Promise<EmployeeDetails | null> {
+  const where = lookupWhere(lookup)
+
+  const row = await prisma.employee.findFirst({
+    where,
+    select: {
+      id: true,
+      employeeCode: true,
+      firstName: true,
+      lastName: true,
+      email: true,
+      phone: true,
+      dateOfJoining: true,
+      designation: true,
+      employmentStatus: true,
+      country: { select: { id: true, name: true, isoCode: true } },
+      department: { select: { id: true, name: true } },
+      salaries: {
+        orderBy: { effectiveFrom: 'desc' },
+        select: {
+          id: true,
+          amount: true,
+          effectiveFrom: true,
+          effectiveTo: true,
+          currency: { select: currencySelect },
+        },
+      },
+      salaryRevisions: {
+        orderBy: { changedAt: 'desc' },
+        select: {
+          id: true,
+          salaryId: true,
+          previousAmount: true,
+          updatedAmount: true,
+          changeReason: true,
+          changedAt: true,
+          previousCurrency: { select: currencySelect },
+          updatedCurrency: { select: currencySelect },
+        },
+      },
+    },
+  })
+
+  if (row === null) {
+    return null
+  }
+
+  const currentSalary = row.salaries.find((salary) => isCurrentSalary(salary, asOf)) ?? null
+
+  return {
+    id: row.id,
+    employeeCode: row.employeeCode,
+    firstName: row.firstName,
+    lastName: row.lastName,
+    email: row.email,
+    phone: row.phone,
+    dateOfJoining: row.dateOfJoining,
+    designation: row.designation,
+    employmentStatus: row.employmentStatus,
+    country: row.country,
+    department: row.department,
+    currentSalary,
+    salaryHistory: row.salaries,
+    salaryRevisions: row.salaryRevisions,
+  }
+}
