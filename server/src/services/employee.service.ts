@@ -3,10 +3,12 @@ import {
   deactivateEmployeeRecord,
   findEmployee,
   findEmployeePage,
+  findEmployeeSalaryHistory,
   updateEmployeeRecord,
   type CreatedEmployee,
   type EmployeeDetails,
   type EmployeeLookup,
+  type EmployeeSalaryHistoryRecord,
   type ListedEmployee,
   type UpdatedEmployee,
 } from '../repositories/employee.repository.js'
@@ -41,6 +43,12 @@ export async function listEmployees(query: EmployeeListQuery): Promise<EmployeeL
 
 export async function getEmployee(lookup: EmployeeLookup): Promise<EmployeeDetails | null> {
   return findEmployee(lookup, new Date())
+}
+
+export async function getEmployeeSalaryHistory(
+  lookup: EmployeeLookup,
+): Promise<EmployeeSalaryHistoryRecord[] | null> {
+  return findEmployeeSalaryHistory(lookup)
 }
 
 export async function createEmployee(input: CreateEmployeeInput): Promise<CreatedEmployee> {

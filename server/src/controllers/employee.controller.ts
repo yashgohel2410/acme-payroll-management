@@ -8,13 +8,22 @@ import {
   EmployeeReferenceNotFoundError,
 } from '../repositories/employee.repository.js'
 import {
+  EmployeeInactiveError,
+  SalaryOverlapError,
+  SalaryRevisionConflictError,
+  SalaryRevisionUnavailableError,
+} from '../repositories/salary.repository.js'
+import {
   createEmployee,
   deactivateEmployee,
   getEmployee,
+  getEmployeeSalaryHistory,
   listEmployees,
   updateEmployee,
 } from '../services/employee.service.js'
+import { createSalaryRevision } from '../services/salary.service.js'
 import { createEmployeeSchema } from '../validators/createEmployee.js'
+import { createSalaryRevisionSchema } from '../validators/createSalaryRevision.js'
 import { updateEmployeeSchema } from '../validators/updateEmployee.js'
 import { employeeIdentifierSchema } from '../validators/employeeIdentifier.js'
 import { employeeListQuerySchema } from '../validators/employeeListQuery.js'
@@ -69,6 +78,34 @@ export async function getEmployeeByIdentifier(
     }
 
     response.status(200).json({ data: employee })
+  } catch (error: unknown) {
+    next(error)
+  }
+}
+
+export async function getEmployeeSalaryHistoryByIdentifier(
+  request: Request,
+  response: Response,
+  next: NextFunction,
+): Promise<void> {
+  const routeId = request.params.id
+  const parsed = employeeIdentifierSchema.safeParse(
+    typeof routeId === 'string' ? routeId : undefined,
+  )
+
+  if (!parsed.success) {
+    next(new HttpError(400, 'Invalid employee identifier', fieldErrors(parsed.error)))
+    return
+  }
+
+  try {
+    const salaries = await getEmployeeSalaryHistory(parsed.data)
+    if (salaries === null) {
+      next(new HttpError(404, 'Employee not found'))
+      return
+    }
+
+    response.status(200).json({ data: salaries })
   } catch (error: unknown) {
     next(error)
   }
@@ -203,6 +240,73 @@ export async function deleteEmployee(
           { field: 'employmentStatus', message: 'Already inactive' },
         ]),
       )
+      return
+    }
+
+    next(error)
+  }
+}
+
+export async function postEmployeeSalary(
+  request: Request,
+  response: Response,
+  next: NextFunction,
+): Promise<void> {
+  const routeId = request.params.id
+  const identifier = employeeIdentifierSchema.safeParse(
+    typeof routeId === 'string' ? routeId : undefined,
+  )
+
+  if (!identifier.success) {
+    next(new HttpError(400, 'Invalid employee identifier', fieldErrors(identifier.error)))
+    return
+  }
+
+  const parsed = createSalaryRevisionSchema.safeParse(request.body)
+
+  if (!parsed.success) {
+    next(new HttpError(400, 'Invalid request body', fieldErrors(parsed.error)))
+    return
+  }
+
+  try {
+    const revision = await createSalaryRevision(identifier.data, parsed.data)
+    response.status(201).json({ data: revision })
+  } catch (error: unknown) {
+    if (error instanceof EmployeeNotFoundError) {
+      next(new HttpError(404, error.message))
+      return
+    }
+
+    if (error instanceof EmployeeReferenceNotFoundError) {
+      next(
+        new HttpError(
+          404,
+          error.message,
+          error.fields.map((field) => ({ field, message: 'Record not found' })),
+        ),
+      )
+      return
+    }
+
+    if (error instanceof EmployeeInactiveError) {
+      next(
+        new HttpError(409, error.message, [
+          { field: 'employmentStatus', message: 'Employee is inactive' },
+        ]),
+      )
+      return
+    }
+
+    if (error instanceof SalaryOverlapError || error instanceof SalaryRevisionUnavailableError) {
+      next(
+        new HttpError(409, error.message, [{ field: 'effectiveFrom', message: error.message }]),
+      )
+      return
+    }
+
+    if (error instanceof SalaryRevisionConflictError) {
+      next(new HttpError(409, error.message))
       return
     }
 

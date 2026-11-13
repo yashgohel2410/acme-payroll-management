@@ -596,3 +596,177 @@ describe('DELETE /api/employees/:id', () => {
     expect(after.employmentStatus).toBe('INACTIVE')
   })
 })
+
+describe('GET /api/employees/:id/salary-history', () => {
+  it('returns salary records and revisions for an existing employee', async () => {
+    const employee = await prisma.employee.findUniqueOrThrow({ where: { employeeCode: 'LST001' } })
+    const response = await request(app).get(`/api/employees/${employee.id}/salary-history`)
+
+    expect(response.status).toBe(200)
+    expect(response.body.data).toHaveLength(2)
+    expect(response.body.data[0]).toMatchObject({
+      amount: 5_000_001,
+      effectiveFrom: '2020-01-01T00:00:00.000Z',
+      effectiveTo: null,
+      currency: { code: 'INR' },
+    })
+    expect(response.body.data[1]).toMatchObject({
+      amount: 4_000_000,
+      effectiveFrom: '2019-01-01T00:00:00.000Z',
+      effectiveTo: '2019-12-31T00:00:00.000Z',
+      currency: { code: 'INR' },
+      revisions: [],
+    })
+    expect(response.body.data[0].revisions[0]).toMatchObject({
+      previousAmount: 4_000_000,
+      updatedAmount: 5_000_001,
+      changeReason: 'Annual review',
+      previousCurrency: { code: 'INR' },
+      updatedCurrency: { code: 'INR' },
+    })
+
+    const inactive = await prisma.employee.findUniqueOrThrow({ where: { employeeCode: 'LST014' } })
+    expect(inactive.employmentStatus).toBe('INACTIVE')
+    const inactiveHistory = await request(app).get('/api/employees/LST014/salary-history')
+    expect(inactiveHistory.status).toBe(200)
+    expect(inactiveHistory.body.data).toEqual([
+      expect.objectContaining({
+        amount: 5_000_014,
+        currency: expect.objectContaining({ code: 'USD' }),
+      }),
+    ])
+  })
+
+  it('returns an empty list when the employee has no salary history', async () => {
+    const response = await request(app).get('/api/employees/LST023/salary-history')
+
+    expect(response.status).toBe(200)
+    expect(response.body.data).toEqual([])
+  })
+
+  it('returns 404 when the employee does not exist', async () => {
+    const response = await request(app).get('/api/employees/999999/salary-history')
+
+    expect(response.status).toBe(404)
+    expect(response.body.error.message).toBe('Employee not found')
+  })
+})
+
+describe('POST /api/employees/:id/salary', () => {
+  async function currencyId(): Promise<number> {
+    const currency = await prisma.currency.findUniqueOrThrow({ where: { code: 'INR' } })
+    return currency.id
+  }
+
+  async function payload(overrides: Record<string, unknown> = {}): Promise<Record<string, unknown>> {
+    return {
+      amount: 6_100_000,
+      currencyId: await currencyId(),
+      effectiveFrom: '2024-03-01',
+      reason: 'Promotion',
+      ...overrides,
+    }
+  }
+
+  it('creates a salary revision and closes the previous period', async () => {
+    const employee = await prisma.employee.findUniqueOrThrow({
+      where: { employeeCode: 'LST002' },
+      include: { salaries: true },
+    })
+    const previous = employee.salaries[0]
+
+    if (previous === undefined) {
+      throw new Error('Expected LST002 to have a salary')
+    }
+
+    const response = await request(app).post(`/api/employees/${employee.id}/salary`).send(await payload())
+
+    expect(response.status).toBe(201)
+    expect(response.body.data).toMatchObject({
+      salaryId: response.body.data.salary.id,
+      previousAmount: 5_000_002,
+      updatedAmount: 6_100_000,
+      changeReason: 'Promotion',
+      previousCurrency: { code: 'INR' },
+      updatedCurrency: { code: 'INR' },
+      salary: {
+        amount: 6_100_000,
+        effectiveFrom: '2024-03-01T00:00:00.000Z',
+        effectiveTo: null,
+        currency: { code: 'INR' },
+      },
+    })
+    expect(response.body.data.changedAt).toEqual(expect.any(String))
+
+    const storedPrevious = await prisma.salary.findUniqueOrThrow({ where: { id: previous.id } })
+    expect(storedPrevious.amount).toBe(5_000_002)
+    expect(storedPrevious.effectiveTo?.toISOString()).toBe('2024-02-29T00:00:00.000Z')
+
+    const history = await request(app).get(`/api/employees/${employee.id}/salary-history`)
+    expect(history.body.data.map((salary: { amount: number }) => salary.amount)).toEqual([
+      6_100_000, 5_000_002,
+    ])
+  })
+
+  it('returns 404 when the currency does not exist', async () => {
+    const employee = await prisma.employee.findUniqueOrThrow({
+      where: { employeeCode: 'LST003' },
+      include: { salaries: true },
+    })
+    const response = await request(app)
+      .post('/api/employees/LST003/salary')
+      .send(await payload({ currencyId: 999_999 }))
+
+    expect(response.status).toBe(404)
+    expect(response.body.error.fields).toEqual([{ field: 'currencyId', message: 'Record not found' }])
+    expect(await prisma.salary.count({ where: { employeeId: employee.id } })).toBe(employee.salaries.length)
+  })
+
+  it('returns 409 when the employee is inactive', async () => {
+    const employee = await prisma.employee.findUniqueOrThrow({
+      where: { employeeCode: 'LST014' },
+      include: { salaries: true },
+    })
+    expect(employee.employmentStatus).toBe('INACTIVE')
+
+    const response = await request(app).post('/api/employees/LST014/salary').send(await payload())
+
+    expect(response.status).toBe(409)
+    expect(response.body.error.message).toBe('Inactive employees cannot receive a salary revision')
+    expect(response.body.error.fields).toEqual([
+      { field: 'employmentStatus', message: 'Employee is inactive' },
+    ])
+    expect(await prisma.salary.count({ where: { employeeId: employee.id } })).toBe(employee.salaries.length)
+  })
+
+  it('returns 409 when the new period overlaps an existing salary', async () => {
+    const employee = await prisma.employee.findUniqueOrThrow({
+      where: { employeeCode: 'LST001' },
+      include: { salaries: { orderBy: { effectiveFrom: 'asc' } } },
+    })
+    const response = await request(app)
+      .post('/api/employees/LST001/salary')
+      .send(await payload({ effectiveFrom: '2019-06-15', amount: 4_200_000, reason: 'Backdated' }))
+
+    expect(response.status).toBe(409)
+    expect(response.body.error.message).toBe('Salary periods must not overlap')
+    expect(response.body.error.fields).toEqual([
+      { field: 'effectiveFrom', message: 'Salary periods must not overlap' },
+    ])
+
+    const salaries = await prisma.salary.findMany({
+      where: { employeeId: employee.id },
+      orderBy: { effectiveFrom: 'asc' },
+    })
+    expect(salaries.map((salary) => salary.effectiveTo?.toISOString() ?? null)).toEqual(
+      employee.salaries.map((salary) => salary.effectiveTo?.toISOString() ?? null),
+    )
+  })
+
+  it('returns 404 when the employee does not exist', async () => {
+    const response = await request(app).post('/api/employees/999999/salary').send(await payload())
+
+    expect(response.status).toBe(404)
+    expect(response.body.error.message).toBe('Employee not found')
+  })
+})

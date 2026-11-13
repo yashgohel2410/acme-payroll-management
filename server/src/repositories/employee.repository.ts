@@ -313,6 +313,50 @@ export async function findEmployee(
   }
 }
 
+export type EmployeeSalaryHistoryRecord = SalaryRecord & {
+  revisions: SalaryRevisionRecord[]
+}
+
+export async function findEmployeeSalaryHistory(
+  lookup: EmployeeLookup,
+): Promise<EmployeeSalaryHistoryRecord[] | null> {
+  const row = await prisma.employee.findFirst({
+    where: lookupWhere(lookup),
+    select: {
+      id: true,
+      salaries: {
+        orderBy: { effectiveFrom: 'desc' },
+        select: {
+          id: true,
+          amount: true,
+          effectiveFrom: true,
+          effectiveTo: true,
+          currency: { select: currencySelect },
+          revisions: {
+            orderBy: { changedAt: 'desc' },
+            select: {
+              id: true,
+              salaryId: true,
+              previousAmount: true,
+              updatedAmount: true,
+              changeReason: true,
+              changedAt: true,
+              previousCurrency: { select: currencySelect },
+              updatedCurrency: { select: currencySelect },
+            },
+          },
+        },
+      },
+    },
+  })
+
+  if (row === null) {
+    return null
+  }
+
+  return row.salaries
+}
+
 export type ReferenceField = 'departmentId' | 'countryId' | 'currencyId'
 export type DuplicateField = 'employeeCode' | 'email'
 
