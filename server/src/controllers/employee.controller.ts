@@ -3,10 +3,12 @@ import { ZodError } from 'zod'
 import { HttpError, type FieldError } from '../middleware/error.middleware.js'
 import {
   EmployeeDuplicateError,
+  EmployeeNotFoundError,
   EmployeeReferenceNotFoundError,
 } from '../repositories/employee.repository.js'
-import { createEmployee, getEmployee, listEmployees } from '../services/employee.service.js'
+import { createEmployee, getEmployee, listEmployees, updateEmployee } from '../services/employee.service.js'
 import { createEmployeeSchema } from '../validators/createEmployee.js'
+import { updateEmployeeSchema } from '../validators/updateEmployee.js'
 import { employeeIdentifierSchema } from '../validators/employeeIdentifier.js'
 import { employeeListQuerySchema } from '../validators/employeeListQuery.js'
 
@@ -81,6 +83,63 @@ export async function postEmployee(
     const employee = await createEmployee(parsed.data)
     response.status(201).json({ data: employee })
   } catch (error: unknown) {
+    if (error instanceof EmployeeReferenceNotFoundError) {
+      next(
+        new HttpError(
+          404,
+          error.message,
+          error.fields.map((field) => ({ field, message: 'Record not found' })),
+        ),
+      )
+      return
+    }
+
+    if (error instanceof EmployeeDuplicateError) {
+      next(
+        new HttpError(
+          409,
+          error.message,
+          error.fields.map((field) => ({ field, message: 'Already exists' })),
+        ),
+      )
+      return
+    }
+
+    next(error)
+  }
+}
+
+export async function putEmployee(
+  request: Request,
+  response: Response,
+  next: NextFunction,
+): Promise<void> {
+  const routeId = request.params.id
+  const identifier = employeeIdentifierSchema.safeParse(
+    typeof routeId === 'string' ? routeId : undefined,
+  )
+
+  if (!identifier.success) {
+    next(new HttpError(400, 'Invalid employee identifier', fieldErrors(identifier.error)))
+    return
+  }
+
+  const parsed = updateEmployeeSchema.safeParse(request.body)
+
+  if (!parsed.success) {
+    next(new HttpError(400, 'Invalid request body', fieldErrors(parsed.error)))
+    return
+  }
+
+  try {
+    const employee = await updateEmployee(identifier.data, parsed.data)
+    response.status(200).json({ data: employee })
+  } catch (error: unknown) {
+    if (error instanceof EmployeeNotFoundError) {
+      next(new HttpError(404, error.message))
+      return
+    }
+
     if (error instanceof EmployeeReferenceNotFoundError) {
       next(
         new HttpError(

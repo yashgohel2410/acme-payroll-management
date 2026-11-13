@@ -3,6 +3,7 @@ import type { EmploymentStatus } from '../generated/prisma/enums.js'
 import { prisma } from '../config/database.js'
 import type { CreateEmployeeInput } from '../validators/createEmployee.js'
 import type { EmployeeListQuery } from '../validators/employeeListQuery.js'
+import type { UpdateEmployeeInput } from '../validators/updateEmployee.js'
 
 export type ListedEmployee = {
   id: number
@@ -325,6 +326,13 @@ export class EmployeeReferenceNotFoundError extends Error {
   }
 }
 
+export class EmployeeNotFoundError extends Error {
+  constructor() {
+    super('Employee not found')
+    this.name = 'EmployeeNotFoundError'
+  }
+}
+
 export class EmployeeDuplicateError extends Error {
   readonly fields: readonly DuplicateField[]
 
@@ -470,6 +478,108 @@ export async function createEmployeeWithSalary(input: CreateEmployeeInput): Prom
 
     if (isUniqueConstraintError(error)) {
       throw new EmployeeDuplicateError(['employeeCode', 'email'])
+    }
+
+    throw error
+  }
+}
+
+export type UpdatedEmployee = Omit<ListedEmployee, 'currentSalary'>
+
+export async function updateEmployeeRecord(
+  lookup: EmployeeLookup,
+  input: UpdateEmployeeInput,
+): Promise<UpdatedEmployee> {
+  try {
+    return await prisma.$transaction(async (transaction) => {
+      const current = await transaction.employee.findFirst({
+        where: lookupWhere(lookup),
+        select: { id: true },
+      })
+
+      if (current === null) {
+        throw new EmployeeNotFoundError()
+      }
+
+      const [department, country, duplicateEmail] = await Promise.all([
+        transaction.department.findUnique({
+          where: { id: input.departmentId },
+          select: { id: true, name: true },
+        }),
+        transaction.country.findUnique({
+          where: { id: input.countryId },
+          select: { id: true, name: true, isoCode: true },
+        }),
+        transaction.employee.findFirst({
+          where: {
+            email: input.email,
+            NOT: { id: current.id },
+          },
+          select: { id: true },
+        }),
+      ])
+
+      const missing: ReferenceField[] = []
+      if (department === null) {
+        missing.push('departmentId')
+      }
+      if (country === null) {
+        missing.push('countryId')
+      }
+      if (missing.length > 0) {
+        throw new EmployeeReferenceNotFoundError(missing)
+      }
+
+      if (duplicateEmail !== null) {
+        throw new EmployeeDuplicateError(['email'])
+      }
+
+      if (department === null || country === null) {
+        throw new EmployeeReferenceNotFoundError(missing)
+      }
+
+      const employee = await transaction.employee.update({
+        where: { id: current.id },
+        data: {
+          firstName: input.firstName,
+          lastName: input.lastName,
+          email: input.email,
+          phone: input.phone ?? null,
+          designation: input.designation,
+          employmentStatus: input.employmentStatus,
+          departmentId: department.id,
+          countryId: country.id,
+        },
+        select: {
+          id: true,
+          employeeCode: true,
+          firstName: true,
+          lastName: true,
+          email: true,
+          phone: true,
+          dateOfJoining: true,
+          designation: true,
+          employmentStatus: true,
+        },
+      })
+
+      return {
+        ...employee,
+        department,
+        country,
+      }
+    })
+  } catch (error: unknown) {
+    if (
+      error instanceof EmployeeNotFoundError ||
+      error instanceof EmployeeReferenceNotFoundError ||
+      error instanceof EmployeeDuplicateError
+    ) {
+      throw error
+    }
+
+    if (isUniqueConstraintError(error)) {
+      throw new EmployeeDuplicateError(['email'])
     }
 
     throw error

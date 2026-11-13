@@ -449,3 +449,93 @@ describe('POST /api/employees', () => {
     )
   })
 })
+
+describe('PUT /api/employees/:id', () => {
+  async function references(): Promise<{ departmentId: number; countryId: number }> {
+    const department = await prisma.department.findUniqueOrThrow({ where: { name: 'Finance' } })
+    const country = await prisma.country.findUniqueOrThrow({ where: { isoCode: 'US' } })
+
+    return { departmentId: department.id, countryId: country.id }
+  }
+
+  function payload(
+    refs: { departmentId: number; countryId: number },
+    overrides: Record<string, unknown> = {},
+  ): Record<string, unknown> {
+    return {
+      firstName: 'Updated',
+      lastName: 'Employee',
+      email: 'lst010@acme.test',
+      phone: '+15550009999',
+      designation: 'Finance Manager',
+      employmentStatus: 'ON_LEAVE',
+      ...refs,
+      ...overrides,
+    }
+  }
+
+  it('updates an employee and keeps the existing email and salary', async () => {
+    const before = await prisma.employee.findUniqueOrThrow({
+      where: { employeeCode: 'LST010' },
+      include: { salaries: true },
+    })
+    const response = await request(app).put('/api/employees/LST010').send(await payload(await references()))
+
+    expect(response.status).toBe(200)
+    expect(response.body.data).toMatchObject({
+      id: before.id,
+      employeeCode: 'LST010',
+      firstName: 'Updated',
+      lastName: 'Employee',
+      email: 'lst010@acme.test',
+      designation: 'Finance Manager',
+      employmentStatus: 'ON_LEAVE',
+      department: { name: 'Finance' },
+      country: { isoCode: 'US' },
+    })
+
+    const salaries = await prisma.salary.findMany({ where: { employeeId: before.id } })
+    expect(salaries.map((salary) => salary.amount)).toEqual(before.salaries.map((salary) => salary.amount))
+  })
+
+  it('returns 404 when the employee does not exist', async () => {
+    const response = await request(app).put('/api/employees/999999').send(await payload(await references()))
+
+    expect(response.status).toBe(404)
+    expect(response.body.error.message).toBe('Employee not found')
+  })
+
+  it('returns 409 when the email belongs to another employee', async () => {
+    const response = await request(app)
+      .put('/api/employees/LST011')
+      .send(payload(await references(), { email: 'lst012@acme.test' }))
+
+    expect(response.status).toBe(409)
+    expect(response.body.error.fields.map((field: { field: string }) => field.field)).toEqual(['email'])
+
+    const unchanged = await prisma.employee.findUniqueOrThrow({ where: { employeeCode: 'LST011' } })
+    expect(unchanged.email).toBe('lst011@acme.test')
+  })
+
+  it('returns 404 when the department or country does not exist', async () => {
+    const before = await prisma.employee.findUniqueOrThrow({ where: { employeeCode: 'LST013' } })
+    const response = await request(app)
+      .put('/api/employees/LST013')
+      .send(
+        payload(await references(), {
+          firstName: 'ShouldNotSave',
+          departmentId: 999_999,
+          countryId: 999_999,
+        }),
+      )
+
+    expect(response.status).toBe(404)
+    expect(response.body.error.fields.map((field: { field: string }) => field.field)).toEqual(
+      expect.arrayContaining(['departmentId', 'countryId']),
+    )
+
+    const after = await prisma.employee.findUniqueOrThrow({ where: { employeeCode: 'LST013' } })
+    expect(after.firstName).toBe(before.firstName)
+    expect(after.departmentId).toBe(before.departmentId)
+  })
+})
