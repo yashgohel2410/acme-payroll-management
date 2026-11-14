@@ -9,6 +9,15 @@ vi.mock('../services/salaryApi.ts', () => ({
   readSalaryError: (error: unknown) => (error instanceof Error ? error.message : 'Salaries could not be loaded.'),
 }))
 
+vi.mock('../../employees/services/employeeApi.ts', () => ({
+  loadEmployeeCatalog: vi.fn().mockResolvedValue({
+    departments: [],
+    countries: [],
+    currencies: [],
+    nextEmployeeCode: 'EMP-1',
+  }),
+}))
+
 import { listSalaries } from '../services/salaryApi.ts'
 
 const listSalariesMock = vi.mocked(listSalaries)

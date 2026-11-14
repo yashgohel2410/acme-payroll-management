@@ -7,6 +7,7 @@ import {
   employmentStatuses,
   type CreateEmployeePayload,
   type UpdateEmployeePayload,
+  type EmployeeCatalogOptions,
   type EmployeeCurrency,
   type EmployeeDetails,
   type EmployeeListParams,
@@ -415,13 +416,12 @@ export async function loadNextEmployeeCode(): Promise<string> {
   return formatEmployeeCode(highest + 1)
 }
 
-export async function loadEmployeeReferenceOptions(): Promise<EmployeeReferenceOptions> {
-  const [employees, salaries, nextEmployeeCode] = await Promise.all([
+export async function loadEmployeeCatalog(): Promise<EmployeeCatalogOptions> {
+  const [employees, salaries] = await Promise.all([
     listEmployees({ page: 1, limit: 100, sortBy: 'employeeCode', sortOrder: 'asc' }),
     apiClient.get<unknown>('/salaries', {
       params: { page: 1, limit: 100, sortBy: 'effectiveFrom', sortOrder: 'asc' },
     }),
-    loadNextEmployeeCode(),
   ])
   const salaryReferences = parseSalaryReferences(salaries.data)
   const departments = new Map<number, NamedOption>()
@@ -454,8 +454,13 @@ export async function loadEmployeeReferenceOptions(): Promise<EmployeeReferenceO
     departments: [...departments.values()].sort((left, right) => left.name.localeCompare(right.name)),
     countries: [...countries.values()].sort((left, right) => left.name.localeCompare(right.name)),
     currencies: [...currencies.values()].sort((left, right) => left.code.localeCompare(right.code)),
-    nextEmployeeCode,
   }
+}
+
+export async function loadEmployeeReferenceOptions(): Promise<EmployeeReferenceOptions> {
+  const [catalog, nextEmployeeCode] = await Promise.all([loadEmployeeCatalog(), loadNextEmployeeCode()])
+
+  return { ...catalog, nextEmployeeCode }
 }
 
 export async function deactivateEmployee(identifier: string): Promise<void> {

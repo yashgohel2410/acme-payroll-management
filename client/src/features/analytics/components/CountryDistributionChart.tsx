@@ -1,3 +1,4 @@
+import { memo } from 'react'
 import {
   Bar,
   BarChart,
@@ -49,7 +50,9 @@ function isCountry(value: unknown): value is CountryDistribution {
   )
 }
 
-export function CountryDistributionChart({ countries }: CountryDistributionChartProps) {
+export const CountryDistributionChart = memo(function CountryDistributionChart({
+  countries,
+}: CountryDistributionChartProps) {
   const points = [...countries]
   const emptyNames = points
     .filter((country) => country.employeeCount === 0)
@@ -110,4 +113,4 @@ export function CountryDistributionChart({ countries }: CountryDistributionChart
       ) : null}
     </ChartPanel>
   )
-}
+})

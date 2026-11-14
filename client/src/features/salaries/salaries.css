@@ -1,9 +1,13 @@
-.salary-page__search {
-  max-width: 28rem;
+.salary-page__filters {
+  display: grid;
+  grid-template-columns: minmax(14rem, 1.5fr) repeat(4, minmax(9rem, 1fr)) auto;
+  gap: 0.75rem;
+  align-items: center;
 }
 
-.salary-page__search .p-iconfield,
-.salary-page__search .p-inputtext {
+.salary-page__filters .p-iconfield,
+.salary-page__filters .p-dropdown,
+.salary-page__filters .p-inputtext {
   width: 100%;
 }
 
@@ -22,8 +26,14 @@
   margin-top: 0.75rem;
 }
 
+@media (max-width: 1100px) {
+  .salary-page__filters {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
 @media (max-width: 720px) {
-  .salary-page__search {
-    max-width: none;
+  .salary-page__filters {
+    grid-template-columns: 1fr;
   }
 }

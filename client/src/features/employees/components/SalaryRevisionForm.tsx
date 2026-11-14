@@ -6,7 +6,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { EmployeeCurrency } from '../types.ts'
 import { FormField } from './FormField.tsx'
 import { emptySalaryRevision, parseSalaryRevision, type SalaryRevisionValues } from '../salaryRevision.ts'
-import { EmployeeSaveError, loadEmployeeReferenceOptions, readEmployeeError, reviseEmployeeSalary } from '../services/employeeApi.ts'
+import { EmployeeSaveError, loadEmployeeCatalog, readEmployeeError, reviseEmployeeSalary } from '../services/employeeApi.ts'
 
 type SalaryRevisionFormProps = {
   employeeId: number
@@ -37,7 +37,7 @@ export function SalaryRevisionForm({ employeeId, onRevised }: SalaryRevisionForm
     setLoading(true)
     setLoadError(null)
 
-    loadEmployeeReferenceOptions()
+    loadEmployeeCatalog()
       .then((options) => {
         if (active) {
           setCurrencies(options.currencies)

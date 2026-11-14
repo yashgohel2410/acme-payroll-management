@@ -385,14 +385,19 @@ describe('POST /api/employees', () => {
     expect(stored?.amount).toBe(4_500_000)
   })
 
-  it('returns 409 when the email already exists', async () => {
+  it('returns 409 when the email already exists and does not add another employee', async () => {
     const refs = await references()
+    const beforeEmployees = await prisma.employee.count()
+    const beforeSalaries = await prisma.salary.count()
     const response = await request(app)
       .post('/api/employees')
       .send(payload(refs, { employeeCode: 'NEW002', email: 'asha.menon@acme.test' }))
 
     expect(response.status).toBe(409)
     expect(response.body.error.fields.map((field: { field: string }) => field.field)).toContain('email')
+    expect(response.body.stack).toBeUndefined()
+    expect(await prisma.employee.count()).toBe(beforeEmployees)
+    expect(await prisma.salary.count()).toBe(beforeSalaries)
   })
 
   it('returns 409 when the employee code already exists', async () => {

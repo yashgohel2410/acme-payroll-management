@@ -143,9 +143,12 @@ export type EmployeeFormValues = {
   effectiveFrom: string
 }
 
-export type EmployeeReferenceOptions = {
+export type EmployeeCatalogOptions = {
   departments: NamedOption[]
   countries: NamedOption[]
   currencies: EmployeeCurrency[]
+}
+
+export type EmployeeReferenceOptions = EmployeeCatalogOptions & {
   nextEmployeeCode: string
 }

@@ -22,19 +22,19 @@ function countForStatus(
 export async function findDashboardSummary(asOf: Date): Promise<DashboardSummary> {
   const revisionSince = new Date(asOf.getTime() - SALARY_REVISION_WINDOW_MS)
 
-  const [totalEmployees, statusGroups, totalDepartments, totalCountries, salaryRevisionsLast30Days] =
-    await Promise.all([
-      prisma.employee.count(),
-      prisma.employee.groupBy({
-        by: ['employmentStatus'],
-        _count: { _all: true },
-      }),
-      prisma.department.count(),
-      prisma.country.count(),
-      prisma.salaryRevision.count({
-        where: { changedAt: { gte: revisionSince } },
-      }),
-    ])
+  const [statusGroups, totalDepartments, totalCountries, salaryRevisionsLast30Days] = await Promise.all([
+    prisma.employee.groupBy({
+      by: ['employmentStatus'],
+      _count: { _all: true },
+    }),
+    prisma.department.count(),
+    prisma.country.count(),
+    prisma.salaryRevision.count({
+      where: { changedAt: { gte: revisionSince } },
+    }),
+  ])
+
+  const totalEmployees = statusGroups.reduce((total, group) => total + group._count._all, 0)
 
   return {
     totalEmployees,

@@ -1,3 +1,4 @@
+import { memo } from 'react'
 import {
   Bar,
   BarChart,
@@ -32,7 +33,9 @@ function isDepartment(value: unknown): value is DepartmentDistribution {
   )
 }
 
-export function DepartmentDistributionChart({ departments }: DepartmentDistributionChartProps) {
+export const DepartmentDistributionChart = memo(function DepartmentDistributionChart({
+  departments,
+}: DepartmentDistributionChartProps) {
   const points = [...departments]
   const emptyNames = points.filter((department) => department.employeeCount === 0).map((department) => department.name)
   const plotWidth = Math.max(360, points.length * 76)
@@ -84,4 +87,4 @@ export function DepartmentDistributionChart({ departments }: DepartmentDistribut
       ) : null}
     </ChartPanel>
   )
-}
+})

@@ -1,6 +1,6 @@
 import { Button } from 'primereact/button'
 import { Toast } from 'primereact/toast'
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { routePaths } from '../../../app/routePaths.ts'
 import { DeactivateEmployeeDialog } from '../components/DeactivateEmployeeDialog.tsx'
@@ -230,6 +230,26 @@ export function EmployeeListPage() {
     ? 'No employees match these filters.'
     : 'No employees have been added yet.'
 
+  const handlePageChange = useCallback(
+    (nextPage: number, nextLimit: number) => {
+      setPage(nextLimit === limit ? nextPage : 1)
+      setLimit(nextLimit)
+    },
+    [limit],
+  )
+
+  const handleSortChange = useCallback((nextSortBy: EmployeeSortField, nextSortOrder: EmployeeSortOrder) => {
+    setSortBy(nextSortBy)
+    setSortOrder(nextSortOrder)
+    setPage(1)
+  }, [])
+
+  const handleDeactivate = useCallback((employee: ListedEmployee) => {
+    if (!savingRef.current && employee.employmentStatus !== 'INACTIVE') {
+      setDeactivateTarget(employee)
+    }
+  }, [])
+
   return (
     <section className="employee-page">
       <Toast ref={toast} />
@@ -297,20 +317,9 @@ export function EmployeeListPage() {
             sortOrder={sortOrder}
             emptyMessage={emptyMessage}
             deactivatingId={deactivating && deactivateTarget !== null ? deactivateTarget.id : null}
-            onDeactivate={(employee) => {
-              if (!savingRef.current && employee.employmentStatus !== 'INACTIVE') {
-                setDeactivateTarget(employee)
-              }
-            }}
-            onPageChange={(nextPage, nextLimit) => {
-              setPage(nextLimit === limit ? nextPage : 1)
-              setLimit(nextLimit)
-            }}
-            onSortChange={(nextSortBy, nextSortOrder) => {
-              setSortBy(nextSortBy)
-              setSortOrder(nextSortOrder)
-              setPage(1)
-            }}
+            onDeactivate={handleDeactivate}
+            onPageChange={handlePageChange}
+            onSortChange={handleSortChange}
           />
         </div>
       ) : null}

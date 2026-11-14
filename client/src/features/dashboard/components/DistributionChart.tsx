@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { memo, useState } from 'react'
 import {
   Bar,
   BarChart,
@@ -91,7 +91,7 @@ function ChartTypeToggle({
   )
 }
 
-export function DistributionChart({
+export const DistributionChart = memo(function DistributionChart({
   title,
   description,
   points,
@@ -173,4 +173,4 @@ export function DistributionChart({
       )}
     </article>
   )
-}
+})

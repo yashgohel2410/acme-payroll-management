@@ -78,7 +78,7 @@ function buildOrderBy(
   sortBy: SalaryListQuery['sortBy'],
   sortOrder: SalaryListQuery['sortOrder'],
 ): Prisma.SalaryOrderByWithRelationInput[] {
-  const tieBreak = { id: 'asc' as const }
+  const tieBreak = { id: sortOrder }
 
   switch (sortBy) {
     case 'amount':

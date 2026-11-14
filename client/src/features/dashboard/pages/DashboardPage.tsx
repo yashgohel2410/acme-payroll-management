@@ -1,5 +1,5 @@
 import { Button } from 'primereact/button'
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { DistributionChart } from '../components/DistributionChart.tsx'
 import { KpiCard } from '../components/KpiCard.tsx'
 import { RecentRevisionsTable } from '../components/RecentRevisionsTable.tsx'
@@ -9,6 +9,33 @@ import '../dashboard.css'
 
 function DashboardContent({ data }: { data: DashboardData }) {
   const { summary } = data
+  const departmentPoints = useMemo(
+    () =>
+      data.departments.map((department) => ({
+        label: department.name,
+        value: department.employeeCount,
+        caption: 'Active employees',
+      })),
+    [data.departments],
+  )
+  const countryPoints = useMemo(
+    () =>
+      data.countries.map((country) => ({
+        label: country.name,
+        value: country.employeeCount,
+        caption: `${country.isoCode} · active employees`,
+      })),
+    [data.countries],
+  )
+  const salaryPoints = useMemo(
+    () =>
+      data.salaries.map((salary) => ({
+        label: salary.code,
+        value: salary.totalAmount,
+        caption: `${salary.employeeCount.toLocaleString('en-US')} employees · minor units`,
+      })),
+    [data.salaries],
+  )
 
   return (
     <>
@@ -29,11 +56,7 @@ function DashboardContent({ data }: { data: DashboardData }) {
         <DistributionChart
           title="Employees by department"
           description="Active employees in each department. Departments with none are included."
-          points={data.departments.map((department) => ({
-            label: department.name,
-            value: department.employeeCount,
-            caption: 'Active employees',
-          }))}
+          points={departmentPoints}
           emptyMessage="No departments have been created."
           valueName="Active employees"
           compactAxis={false}
@@ -41,11 +64,7 @@ function DashboardContent({ data }: { data: DashboardData }) {
         <DistributionChart
           title="Employees by country"
           description="Active employees in each country. Countries with none are included."
-          points={data.countries.map((country) => ({
-            label: country.name,
-            value: country.employeeCount,
-            caption: `${country.isoCode} · active employees`,
-          }))}
+          points={countryPoints}
           emptyMessage="No countries have been created."
           valueName="Active employees"
           compactAxis={false}
@@ -54,11 +73,7 @@ function DashboardContent({ data }: { data: DashboardData }) {
       <DistributionChart
         title="Salary distribution by currency"
         description="Current salary totals for employees who are not inactive. Each currency is shown separately and amounts stay in minor units."
-        points={data.salaries.map((salary) => ({
-          label: salary.code,
-          value: salary.totalAmount,
-          caption: `${salary.employeeCount.toLocaleString('en-US')} employees · minor units`,
-        }))}
+        points={salaryPoints}
         emptyMessage="No current salaries are available."
         valueName="Total minor units"
         compactAxis

@@ -1,12 +1,15 @@
 import { Button } from 'primereact/button'
 import { Column } from 'primereact/column'
 import { DataTable, type DataTableStateEvent } from 'primereact/datatable'
+import { Dropdown, type DropdownChangeEvent } from 'primereact/dropdown'
 import { IconField } from 'primereact/iconfield'
 import { InputIcon } from 'primereact/inputicon'
 import { InputText } from 'primereact/inputtext'
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { formatCurrentSalary, formatIsoDate } from '../../employees/formatEmployee.ts'
+import { loadEmployeeCatalog } from '../../employees/services/employeeApi.ts'
+import type { EmployeeCurrency, NamedOption } from '../../employees/types.ts'
 import {
   listSalaries,
   readSalaryError,
@@ -28,9 +31,20 @@ function formatAmount(salary: ListedSalary): string {
   return formatCurrentSalary({ amount: salary.amount, currency: salary.currency })
 }
 
+function readId(value: unknown): number | null {
+  return typeof value === 'number' ? value : null
+}
+
 export function SalariesPage() {
   const [searchInput, setSearchInput] = useState('')
   const [search, setSearch] = useState('')
+  const [departmentId, setDepartmentId] = useState<number | null>(null)
+  const [countryId, setCountryId] = useState<number | null>(null)
+  const [currencyId, setCurrencyId] = useState<number | null>(null)
+  const [effectiveDate, setEffectiveDate] = useState('')
+  const [departments, setDepartments] = useState<NamedOption[]>([])
+  const [countries, setCountries] = useState<NamedOption[]>([])
+  const [currencies, setCurrencies] = useState<EmployeeCurrency[]>([])
   const [page, setPage] = useState(1)
   const [limit, setLimit] = useState(20)
   const [sortBy, setSortBy] = useState<SalarySortField>('effectiveFrom')
@@ -39,6 +53,31 @@ export function SalariesPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [reloadKey, setReloadKey] = useState(0)
+
+  useEffect(() => {
+    let active = true
+    loadEmployeeCatalog()
+      .then((options) => {
+        if (!active) {
+          return
+        }
+        setDepartments(options.departments)
+        setCountries(options.countries)
+        setCurrencies(options.currencies)
+      })
+      .catch(() => {
+        if (!active) {
+          return
+        }
+        setDepartments([])
+        setCountries([])
+        setCurrencies([])
+      })
+
+    return () => {
+      active = false
+    }
+  }, [])
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -63,6 +102,10 @@ export function SalariesPage() {
       page,
       limit,
       search: search.length > 0 ? search : undefined,
+      departmentId: departmentId ?? undefined,
+      countryId: countryId ?? undefined,
+      currencyId: currencyId ?? undefined,
+      effectiveDate: effectiveDate.length > 0 ? effectiveDate : undefined,
       sortBy,
       sortOrder,
     })
@@ -82,7 +125,7 @@ export function SalariesPage() {
     return () => {
       active = false
     }
-  }, [page, limit, search, sortBy, sortOrder, reloadKey])
+  }, [page, limit, search, departmentId, countryId, currencyId, effectiveDate, sortBy, sortOrder, reloadKey])
 
   function handlePage(event: DataTableStateEvent) {
     setLimit(event.rows)
@@ -99,18 +142,21 @@ export function SalariesPage() {
     setPage(1)
   }
 
+  const filtersActive =
+    search.length > 0 || departmentId !== null || countryId !== null || currencyId !== null || effectiveDate.length > 0
+
   return (
     <section className="employee-page salary-page">
       <header className="employee-page__header">
         <div>
           <p className="page__eyebrow">HR Manager</p>
           <h1>Salaries</h1>
-          <p>Current and historical salary periods. Search by employee code, name, or email.</p>
+          <p>Salary periods for every employee. Search by code, name, or email, and filter by department, country, currency, or a date within the salary period.</p>
         </div>
       </header>
 
-      <div className="salary-page__search">
-        <IconField iconPosition="left">
+      <div className="salary-page__filters">
+        <IconField iconPosition="left" className="employee-filters__search">
           <InputIcon className="pi pi-search" />
           <InputText
             value={searchInput}
@@ -119,6 +165,69 @@ export function SalariesPage() {
             onChange={(event) => setSearchInput(event.target.value)}
           />
         </IconField>
+        <Dropdown
+          value={departmentId}
+          options={departments}
+          optionLabel="name"
+          optionValue="id"
+          placeholder="All departments"
+          aria-label="Department"
+          showClear
+          onChange={(event: DropdownChangeEvent) => {
+            setDepartmentId(readId(event.value))
+            setPage(1)
+          }}
+        />
+        <Dropdown
+          value={countryId}
+          options={countries}
+          optionLabel="name"
+          optionValue="id"
+          placeholder="All countries"
+          aria-label="Country"
+          showClear
+          onChange={(event: DropdownChangeEvent) => {
+            setCountryId(readId(event.value))
+            setPage(1)
+          }}
+        />
+        <Dropdown
+          value={currencyId}
+          options={currencies}
+          optionLabel="code"
+          optionValue="id"
+          placeholder="All currencies"
+          aria-label="Currency"
+          showClear
+          onChange={(event: DropdownChangeEvent) => {
+            setCurrencyId(readId(event.value))
+            setPage(1)
+          }}
+        />
+        <InputText
+          type="date"
+          value={effectiveDate}
+          aria-label="Effective date"
+          onChange={(event) => {
+            setEffectiveDate(event.target.value)
+            setPage(1)
+          }}
+        />
+        <Button
+          type="button"
+          label="Clear filters"
+          icon="pi pi-filter-slash"
+          outlined
+          onClick={() => {
+            setSearchInput('')
+            setSearch('')
+            setDepartmentId(null)
+            setCountryId(null)
+            setCurrencyId(null)
+            setEffectiveDate('')
+            setPage(1)
+          }}
+        />
       </div>
 
       {error !== null && result === null ? (
@@ -157,7 +266,7 @@ export function SalariesPage() {
             onSort={handleSort}
             loading={loading}
             removableSort={false}
-            emptyMessage={search.length > 0 ? 'No salaries match this search.' : 'No salary records are available.'}
+            emptyMessage={filtersActive ? 'No salaries match these filters.' : 'No salary records are available.'}
             responsiveLayout="scroll"
             size="small"
             paginatorTemplate="FirstPageLink PrevPageLink PageLinks NextPageLink LastPageLink RowsPerPageDropdown CurrentPageReport"

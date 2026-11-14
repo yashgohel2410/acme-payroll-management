@@ -1,3 +1,4 @@
+import { memo } from 'react'
 import {
   Bar,
   Cell,
@@ -53,7 +54,9 @@ function salaryRows(salary: SalaryDistribution, employeeTotal: number): { label:
   ]
 }
 
-export function SalaryDistributionChart({ salaries }: SalaryDistributionChartProps) {
+export const SalaryDistributionChart = memo(function SalaryDistributionChart({
+  salaries,
+}: SalaryDistributionChartProps) {
   const points = [...salaries]
   const employeeTotal = points.reduce((sum, salary) => sum + salary.employeeCount, 0)
 
@@ -183,4 +186,4 @@ export function SalaryDistributionChart({ salaries }: SalaryDistributionChartPro
       </div>
     </ChartPanel>
   )
-}
+})

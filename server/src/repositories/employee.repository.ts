@@ -84,7 +84,7 @@ function buildOrderBy(
   sortBy: EmployeeListQuery['sortBy'],
   sortOrder: EmployeeListQuery['sortOrder'],
 ): Prisma.EmployeeOrderByWithRelationInput[] {
-  const tieBreak = { id: 'asc' as const }
+  const tieBreak = { id: sortOrder }
 
   switch (sortBy) {
     case 'employeeCode':

@@ -60,12 +60,13 @@ model Employee {
   salaries         Salary[]
   salaryRevisions  SalaryRevision[]
 
-  @@index([lastName, firstName])
-  @@index([firstName])
-  @@index([departmentId])
-  @@index([countryId])
-  @@index([employmentStatus])
-  @@index([designation])
+  @@index([lastName, id])
+  @@index([firstName, id])
+  @@index([dateOfJoining, id])
+  @@index([departmentId, employmentStatus])
+  @@index([countryId, employmentStatus])
+  @@index([employmentStatus, id])
+  @@index([designation, id])
 }
 
 /// A salary period for one employee. `amount` is an integer in minor units, such as paise for INR.
@@ -82,8 +83,10 @@ model Salary {
 
   @@index([employeeId])
   @@index([currencyId])
-  @@index([effectiveFrom])
-  @@index([effectiveTo])
+  @@index([amount, id])
+  @@index([effectiveFrom, id])
+  @@index([effectiveTo, id])
+  @@index([effectiveTo, currencyId])
   @@index([employeeId, effectiveFrom])
 }
 

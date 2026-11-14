@@ -38,6 +38,10 @@ export type SalaryListParams = {
   page: number
   limit: number
   search?: string
+  departmentId?: number
+  countryId?: number
+  currencyId?: number
+  effectiveDate?: string
   sortBy: SalarySortField
   sortOrder: SalarySortOrder
 }
@@ -154,6 +158,10 @@ export async function listSalaries(params: SalaryListParams): Promise<SalaryList
       page: params.page,
       limit: params.limit,
       search: params.search,
+      departmentId: params.departmentId,
+      countryId: params.countryId,
+      currencyId: params.currencyId,
+      effectiveDate: params.effectiveDate,
       sortBy: params.sortBy,
       sortOrder: params.sortOrder,
     },

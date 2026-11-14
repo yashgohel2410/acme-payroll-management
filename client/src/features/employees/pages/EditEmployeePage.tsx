@@ -9,11 +9,11 @@ import {
   EmployeeNotFoundError,
   EmployeeSaveError,
   getEmployee,
-  loadEmployeeReferenceOptions,
+  loadEmployeeCatalog,
   readEmployeeError,
   updateEmployee,
 } from '../services/employeeApi.ts'
-import type { EmployeeDetails, EmployeeEditValues, EmployeeReferenceOptions, NamedOption } from '../types.ts'
+import type { EmployeeCatalogOptions, EmployeeDetails, EmployeeEditValues, NamedOption } from '../types.ts'
 import '../employees.css'
 
 function includeOption(options: NamedOption[], option: NamedOption): NamedOption[] {
@@ -30,7 +30,7 @@ export function EditEmployeePage() {
   const activeRef = useRef(true)
   const savingRef = useRef(false)
   const [employee, setEmployee] = useState<EmployeeDetails | null>(null)
-  const [options, setOptions] = useState<EmployeeReferenceOptions | null>(null)
+  const [options, setOptions] = useState<EmployeeCatalogOptions | null>(null)
   const [values, setValues] = useState<EmployeeEditValues>(emptyEmployeeEdit)
   const [loading, setLoading] = useState(true)
   const [notFound, setNotFound] = useState(false)
@@ -66,7 +66,7 @@ export function EditEmployeePage() {
     setFormError(null)
     setFieldErrors({})
 
-    Promise.allSettled([getEmployee(id), loadEmployeeReferenceOptions()]).then((results) => {
+    Promise.allSettled([getEmployee(id), loadEmployeeCatalog()]).then((results) => {
       if (!active) {
         return
       }

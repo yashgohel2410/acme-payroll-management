@@ -1,4 +1,5 @@
 import { Button } from 'primereact/button'
+import { memo } from 'react'
 import { Column } from 'primereact/column'
 import { DataTable, type DataTableStateEvent } from 'primereact/datatable'
 import { Link } from 'react-router-dom'
@@ -34,7 +35,7 @@ function isSortField(value: string): value is EmployeeSortField {
   )
 }
 
-export function EmployeeTable({
+export const EmployeeTable = memo(function EmployeeTable({
   employees,
   loading,
   page,
@@ -131,4 +132,4 @@ export function EmployeeTable({
       />
     </DataTable>
   )
-}
+})
