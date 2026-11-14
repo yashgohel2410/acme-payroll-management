@@ -5,12 +5,16 @@ import { fileURLToPath } from 'node:url'
 
 const serverRoot = fileURLToPath(new URL('../..', import.meta.url))
 
-function isPermissionError(error: unknown): boolean {
+function isUnavailableDirectoryError(error: unknown): boolean {
   return (
     typeof error === 'object' &&
     error !== null &&
     'code' in error &&
-    (error.code === 'EACCES' || error.code === 'EPERM' || error.code === 'EROFS')
+    (error.code === 'EACCES' ||
+      error.code === 'EPERM' ||
+      error.code === 'EROFS' ||
+      error.code === 'ENOENT' ||
+      error.code === 'ENOTDIR')
   )
 }
 
@@ -55,7 +59,7 @@ function canUseDirectory(directory: string): boolean {
     accessSync(directory, constants.W_OK)
     return true
   } catch (error: unknown) {
-    if (isPermissionError(error)) {
+    if (isUnavailableDirectoryError(error)) {
       return false
     }
     throw error
