@@ -1,0 +1,122 @@
+.employee-page {
+  display: grid;
+  gap: 1rem;
+  width: 100%;
+  max-width: 76rem;
+}
+
+.employee-page__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.employee-page__header p:last-child {
+  margin: 0.45rem 0 0;
+  color: var(--color-text-muted);
+}
+
+.employee-filters {
+  display: grid;
+  grid-template-columns: minmax(16rem, 1.6fr) repeat(3, minmax(10rem, 1fr)) auto;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+.employee-filters__search,
+.employee-filters .p-dropdown,
+.employee-filters .p-inputtext {
+  width: 100%;
+}
+
+.employee-filters__search .p-inputtext {
+  padding-left: 2.5rem;
+}
+
+.employee-page__table {
+  min-width: 0;
+  padding: 0.35rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+  box-shadow: var(--shadow);
+}
+
+.employee-page__loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 16rem;
+  margin: 0;
+  color: var(--color-primary);
+  font-size: 2rem;
+}
+
+.employee-page__error {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin: 0;
+  padding: 0.9rem 1rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+}
+
+.employee-page__error {
+  flex-wrap: wrap;
+  border-color: #e4b4b4;
+  background: #fff6f6;
+  color: #7a2430;
+}
+
+.employee-page__error p {
+  margin: 0;
+  flex: 1 1 16rem;
+}
+
+.employee-table__action {
+  color: var(--color-primary);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.employee-table__action:hover {
+  text-decoration: underline;
+}
+
+.employee-status {
+  display: inline-flex;
+  padding: 0.15rem 0.55rem;
+  border-radius: 999px;
+  background: #e7f0f7;
+  color: var(--color-primary-strong);
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.employee-status--inactive,
+.employee-status--terminated {
+  background: #f8e8e8;
+  color: #7a2430;
+}
+
+.employee-status--on_leave {
+  background: #fff4df;
+  color: #8a5a12;
+}
+
+@media (max-width: 1100px) {
+  .employee-filters {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 720px) {
+  .employee-page__header,
+  .employee-filters {
+    grid-template-columns: 1fr;
+    display: grid;
+  }
+}
