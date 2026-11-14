@@ -1,5 +1,8 @@
 import 'dotenv/config'
 import { z } from 'zod'
+import { ensureSqliteDatabaseUrl } from './sqlite-database.js'
+
+ensureSqliteDatabaseUrl()
 
 const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
