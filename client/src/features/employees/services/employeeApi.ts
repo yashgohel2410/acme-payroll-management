@@ -1,9 +1,18 @@
 import axios from 'axios'
+import { readApiErrorMessage } from '../../../services/api/apiError.ts'
 import { apiClient } from '../../../services/api/httpClient.ts'
+import { formatEmployeeCode, readEmployeeSequence } from '../employeeForm.ts'
+import type { SalaryRevisionPayload } from '../salaryRevision.ts'
 import {
   employmentStatuses,
+  type CreateEmployeePayload,
+  type UpdateEmployeePayload,
+  type EmployeeCurrency,
+  type EmployeeDetails,
   type EmployeeListParams,
   type EmployeeListResult,
+  type EmployeeReferenceOptions,
+  type EmployeeSalary,
   type EmploymentStatus,
   type ListedEmployee,
   type NamedOption,
@@ -52,11 +61,44 @@ function readNullableString(record: Record<string, unknown>, field: string): str
   return value
 }
 
+export class EmployeeSaveError extends Error {
+  readonly fields: Readonly<Record<string, string>>
+
+  constructor(message: string, fields: Record<string, string> = {}) {
+    super(message)
+    this.name = 'EmployeeSaveError'
+    this.fields = fields
+  }
+}
+
+export class EmployeeNotFoundError extends Error {
+  constructor(message = 'Employee not found') {
+    super(message)
+    this.name = 'EmployeeNotFoundError'
+  }
+}
+
+export class EmployeeAlreadyInactiveError extends Error {
+  constructor(message = 'Employee is already inactive') {
+    super(message)
+    this.name = 'EmployeeAlreadyInactiveError'
+  }
+}
+
 function isEmploymentStatus(value: string): value is EmploymentStatus {
   return employmentStatuses.some((status) => status === value)
 }
 
-function parseCurrency(value: unknown): ListedEmployee['currentSalary'] {
+function parseCurrencyRecord(record: Record<string, unknown>, label: string): EmployeeSalary['currency'] {
+  return {
+    id: readNumber(record, 'id', label),
+    code: readString(record, 'code', label),
+    name: readString(record, 'name', label),
+    minorUnitDigits: readNumber(record, 'minorUnitDigits', label),
+  }
+}
+
+function parseListedSalary(value: unknown): ListedEmployee['currentSalary'] {
   if (value === null || value === undefined) {
     return null
   }
@@ -66,12 +108,20 @@ function parseCurrency(value: unknown): ListedEmployee['currentSalary'] {
 
   return {
     amount: readNumber(salary, 'amount', 'Current salary'),
-    currency: {
-      id: readNumber(currency, 'id', 'Current salary currency'),
-      code: readString(currency, 'code', 'Current salary currency'),
-      name: readString(currency, 'name', 'Current salary currency'),
-      minorUnitDigits: readNumber(currency, 'minorUnitDigits', 'Current salary currency'),
-    },
+    currency: parseCurrencyRecord(currency, 'Current salary currency'),
+  }
+}
+
+function parseSalaryRecord(value: unknown, label: string): EmployeeSalary {
+  const salary = readRecord(value, label)
+  const currency = readRecord(salary.currency, `${label} currency`)
+
+  return {
+    id: readNumber(salary, 'id', label),
+    amount: readNumber(salary, 'amount', label),
+    effectiveFrom: readString(salary, 'effectiveFrom', label),
+    effectiveTo: readNullableString(salary, 'effectiveTo'),
+    currency: parseCurrencyRecord(currency, `${label} currency`),
   }
 }
 
@@ -104,7 +154,7 @@ function parseEmployee(value: unknown): ListedEmployee {
       name: readString(country, 'name', 'Employee country'),
       isoCode: readString(country, 'isoCode', 'Employee country'),
     },
-    currentSalary: parseCurrency(record.currentSalary),
+    currentSalary: parseListedSalary(record.currentSalary),
   }
 }
 
@@ -128,22 +178,7 @@ function parseList(value: unknown): EmployeeListResult {
 }
 
 export function readEmployeeError(error: unknown): string {
-  if (axios.isAxiosError(error)) {
-    const data: unknown = error.response?.data
-    if (isRecord(data) && isRecord(data.error) && typeof data.error.message === 'string') {
-      return data.error.message
-    }
-
-    if (error.message.trim().length > 0) {
-      return error.message
-    }
-  }
-
-  if (error instanceof Error && error.message.trim().length > 0) {
-    return error.message
-  }
-
-  return 'Employees could not be loaded.'
+  return readApiErrorMessage(error, 'Employees could not be loaded.')
 }
 
 export async function listEmployees(params: EmployeeListParams): Promise<EmployeeListResult> {
@@ -189,5 +224,301 @@ export async function loadEmployeeFilterOptions(): Promise<{
   return {
     departments: [...departments.values()].sort((left, right) => left.name.localeCompare(right.name)),
     countries: [...countries.values()].sort((left, right) => left.name.localeCompare(right.name)),
+  }
+}
+
+function parseEmployeeDetails(value: unknown): EmployeeDetails {
+  const record = readRecord(value, 'Employee')
+  const employee = parseEmployee(record)
+  if (!Array.isArray(record.salaryHistory)) {
+    throw new Error('Employee response is missing salaryHistory.')
+  }
+
+  const salaryHistory = record.salaryHistory
+    .map((item) => parseSalaryRecord(item, 'Salary history'))
+    .sort((left, right) => right.effectiveFrom.localeCompare(left.effectiveFrom) || right.id - left.id)
+
+  return {
+    ...employee,
+    currentSalary:
+      record.currentSalary === null || record.currentSalary === undefined
+        ? null
+        : parseSalaryRecord(record.currentSalary, 'Current salary'),
+    salaryHistory,
+  }
+}
+
+export async function getEmployee(identifier: string): Promise<EmployeeDetails> {
+  try {
+    const response = await apiClient.get<unknown>(`/employees/${encodeURIComponent(identifier)}`)
+    const body = readRecord(response.data, 'Employee')
+    return parseEmployeeDetails(body.data)
+  } catch (error: unknown) {
+    if (axios.isAxiosError(error) && error.response?.status === 404) {
+      throw new EmployeeNotFoundError(readEmployeeError(error))
+    }
+
+    throw error
+  }
+}
+
+function readApiFields(error: unknown): Record<string, string> {
+  if (!axios.isAxiosError(error)) {
+    return {}
+  }
+
+  const data: unknown = error.response?.data
+  if (!isRecord(data) || !isRecord(data.error) || !Array.isArray(data.error.fields)) {
+    return {}
+  }
+
+  const fields: Record<string, string> = {}
+  for (const field of data.error.fields) {
+    if (!isRecord(field) || typeof field.field !== 'string' || typeof field.message !== 'string') {
+      continue
+    }
+    if (fields[field.field] === undefined) {
+      fields[field.field] = field.message
+    }
+  }
+
+  return fields
+}
+
+function rememberDepartment(
+  departments: Map<number, NamedOption>,
+  department: { id: number; name: string },
+): void {
+  departments.set(department.id, { id: department.id, name: department.name })
+}
+
+function rememberCountry(
+  countries: Map<number, NamedOption>,
+  country: { id: number; name: string; isoCode: string },
+): void {
+  countries.set(country.id, { id: country.id, name: country.name, detail: country.isoCode })
+}
+
+function rememberCurrency(currencies: Map<number, EmployeeCurrency>, currency: EmployeeCurrency): void {
+  currencies.set(currency.id, currency)
+}
+
+function parseSalaryReferences(value: unknown): {
+  departments: NamedOption[]
+  countries: NamedOption[]
+  currencies: EmployeeCurrency[]
+} {
+  const body = readRecord(value, 'Salary list')
+  if (!Array.isArray(body.data)) {
+    throw new Error('Salary list response is missing data.')
+  }
+
+  const departments = new Map<number, NamedOption>()
+  const countries = new Map<number, NamedOption>()
+  const currencies = new Map<number, EmployeeCurrency>()
+
+  for (const item of body.data) {
+    const salary = readRecord(item, 'Salary')
+    const employee = readRecord(salary.employee, 'Salary employee')
+    const department = readRecord(employee.department, 'Salary department')
+    const country = readRecord(employee.country, 'Salary country')
+    const currency = readRecord(salary.currency, 'Salary currency')
+    rememberDepartment(departments, {
+      id: readNumber(department, 'id', 'Salary department'),
+      name: readString(department, 'name', 'Salary department'),
+    })
+    rememberCountry(countries, {
+      id: readNumber(country, 'id', 'Salary country'),
+      name: readString(country, 'name', 'Salary country'),
+      isoCode: readString(country, 'isoCode', 'Salary country'),
+    })
+    rememberCurrency(currencies, parseCurrencyRecord(currency, 'Salary currency'))
+  }
+
+  return {
+    departments: [...departments.values()],
+    countries: [...countries.values()],
+    currencies: [...currencies.values()],
+  }
+}
+
+const maxEmployeeSequence = 2_147_483_647
+
+async function employeeCodeExists(code: string): Promise<boolean> {
+  try {
+    await getEmployee(code)
+    return true
+  } catch (error: unknown) {
+    if (error instanceof EmployeeNotFoundError) {
+      return false
+    }
+
+    throw error
+  }
+}
+
+async function highestPrefixedSequence(start: number): Promise<number> {
+  const first = start + 1
+  if (first > maxEmployeeSequence || !(await employeeCodeExists(formatEmployeeCode(first)))) {
+    return start
+  }
+
+  let lower = first
+  let upper = first
+  while (await employeeCodeExists(formatEmployeeCode(upper))) {
+    lower = upper
+    if (upper >= maxEmployeeSequence) {
+      return upper
+    }
+
+    const doubled = upper > Math.floor(maxEmployeeSequence / 2) ? maxEmployeeSequence : upper * 2
+    if (doubled === upper) {
+      return upper
+    }
+
+    upper = doubled
+  }
+
+  while (lower + 1 < upper) {
+    const mid = Math.floor((lower + upper) / 2)
+    if (await employeeCodeExists(formatEmployeeCode(mid))) {
+      lower = mid
+    } else {
+      upper = mid
+    }
+  }
+
+  return lower
+}
+
+export async function loadNextEmployeeCode(): Promise<string> {
+  const latest = await listEmployees({
+    page: 1,
+    limit: 100,
+    sortBy: 'employeeCode',
+    sortOrder: 'desc',
+  })
+
+  let highest = 0
+  for (const employee of latest.data) {
+    const sequence = readEmployeeSequence(employee.employeeCode)
+    if (sequence !== null && sequence > highest) {
+      highest = sequence
+    }
+  }
+
+  highest = await highestPrefixedSequence(highest)
+  if (highest >= maxEmployeeSequence) {
+    throw new Error('No employee codes are left.')
+  }
+
+  return formatEmployeeCode(highest + 1)
+}
+
+export async function loadEmployeeReferenceOptions(): Promise<EmployeeReferenceOptions> {
+  const [employees, salaries, nextEmployeeCode] = await Promise.all([
+    listEmployees({ page: 1, limit: 100, sortBy: 'employeeCode', sortOrder: 'asc' }),
+    apiClient.get<unknown>('/salaries', {
+      params: { page: 1, limit: 100, sortBy: 'effectiveFrom', sortOrder: 'asc' },
+    }),
+    loadNextEmployeeCode(),
+  ])
+  const salaryReferences = parseSalaryReferences(salaries.data)
+  const departments = new Map<number, NamedOption>()
+  const countries = new Map<number, NamedOption>()
+  const currencies = new Map<number, EmployeeCurrency>()
+
+  for (const employee of employees.data) {
+    rememberDepartment(departments, employee.department)
+    rememberCountry(countries, employee.country)
+    if (employee.currentSalary !== null) {
+      rememberCurrency(currencies, employee.currentSalary.currency)
+    }
+  }
+
+  for (const department of salaryReferences.departments) {
+    rememberDepartment(departments, { id: department.id, name: department.name })
+  }
+  for (const country of salaryReferences.countries) {
+    rememberCountry(countries, {
+      id: country.id,
+      name: country.name,
+      isoCode: country.detail ?? '',
+    })
+  }
+  for (const currency of salaryReferences.currencies) {
+    rememberCurrency(currencies, currency)
+  }
+
+  return {
+    departments: [...departments.values()].sort((left, right) => left.name.localeCompare(right.name)),
+    countries: [...countries.values()].sort((left, right) => left.name.localeCompare(right.name)),
+    currencies: [...currencies.values()].sort((left, right) => left.code.localeCompare(right.code)),
+    nextEmployeeCode,
+  }
+}
+
+export async function deactivateEmployee(identifier: string): Promise<void> {
+  try {
+    await apiClient.delete(`/employees/${encodeURIComponent(identifier)}`)
+  } catch (error: unknown) {
+    if (!axios.isAxiosError(error)) {
+      throw error
+    }
+
+    const fields = readApiFields(error)
+    if (error.response?.status === 404) {
+      throw new EmployeeNotFoundError(readEmployeeError(error))
+    }
+
+    if (error.response?.status === 409 && fields.employmentStatus !== undefined) {
+      throw new EmployeeAlreadyInactiveError(readEmployeeError(error))
+    }
+
+    throw new EmployeeSaveError(readEmployeeError(error), fields)
+  }
+}
+
+export async function updateEmployee(identifier: string, payload: UpdateEmployeePayload): Promise<void> {
+  try {
+    await apiClient.put(`/employees/${encodeURIComponent(identifier)}`, payload)
+  } catch (error: unknown) {
+    if (!axios.isAxiosError(error)) {
+      throw error
+    }
+
+    const fields = readApiFields(error)
+    if (error.response?.status === 404 && Object.keys(fields).length === 0) {
+      throw new EmployeeNotFoundError(readEmployeeError(error))
+    }
+
+    throw new EmployeeSaveError(readEmployeeError(error), fields)
+  }
+}
+
+export async function createEmployee(payload: CreateEmployeePayload): Promise<number> {
+  try {
+    const response = await apiClient.post<unknown>('/employees', payload)
+    const body = readRecord(response.data, 'Create employee')
+    const employee = readRecord(body.data, 'Create employee')
+    return readNumber(employee, 'id', 'Create employee')
+  } catch (error: unknown) {
+    if (axios.isAxiosError(error)) {
+      throw new EmployeeSaveError(readEmployeeError(error), readApiFields(error))
+    }
+
+    throw error
+  }
+}
+
+export async function reviseEmployeeSalary(id: number, payload: SalaryRevisionPayload): Promise<void> {
+  try {
+    await apiClient.post(`/employees/${id}/salary`, payload)
+  } catch (error: unknown) {
+    if (axios.isAxiosError(error)) {
+      throw new EmployeeSaveError(readEmployeeError(error), readApiFields(error))
+    }
+
+    throw error
   }
 }

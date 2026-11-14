@@ -133,6 +133,7 @@ h1 {
   display: flex;
   flex-direction: column;
   min-width: 0;
+  max-width: 100%;
 }
 
 .topnav {
@@ -160,28 +161,50 @@ h1 {
 
 .topnav__title {
   min-width: 0;
+  overflow: hidden;
 }
 
 .topnav__eyebrow {
+  overflow: hidden;
   color: var(--color-text-muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .topnav__page {
+  overflow: hidden;
   font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .topnav__persona {
+  flex: 0 0 auto;
+  max-width: 40%;
   margin-left: auto;
   padding: 0.35rem 0.7rem;
+  overflow: hidden;
   border-radius: 999px;
   background: #e7f0f7;
   color: var(--color-primary-strong);
   font-size: 0.85rem;
   font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .app-shell__content {
+  min-width: 0;
+  max-width: 100%;
   padding: 1.5rem;
+}
+
+.p-datatable-wrapper {
+  overflow-x: auto;
+}
+
+.p-dialog {
+  max-width: calc(100vw - 2rem);
 }
 
 .page {
@@ -248,5 +271,9 @@ h1 {
 
   .app-shell__content {
     padding: 1rem;
+  }
+
+  .topnav__persona {
+    display: none;
   }
 }

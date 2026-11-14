@@ -1,10 +1,16 @@
 import { Button } from 'primereact/button'
-import { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Toast } from 'primereact/toast'
+import { useEffect, useRef, useState } from 'react'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { routePaths } from '../../../app/routePaths.ts'
+import { DeactivateEmployeeDialog } from '../components/DeactivateEmployeeDialog.tsx'
 import { EmployeeFilters } from '../components/EmployeeFilters.tsx'
 import { EmployeeTable } from '../components/EmployeeTable.tsx'
+import { formatEmployeeName } from '../formatEmployee.ts'
 import {
+  EmployeeAlreadyInactiveError,
+  EmployeeNotFoundError,
+  deactivateEmployee,
   listEmployees,
   loadEmployeeFilterOptions,
   readEmployeeError,
@@ -14,6 +20,7 @@ import type {
   EmployeeSortField,
   EmployeeSortOrder,
   EmploymentStatus,
+  ListedEmployee,
   NamedOption,
 } from '../types.ts'
 import '../employees.css'
@@ -37,7 +44,38 @@ export function EmployeeListPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [reloadKey, setReloadKey] = useState(0)
+  const [deactivateTarget, setDeactivateTarget] = useState<ListedEmployee | null>(null)
+  const [deactivating, setDeactivating] = useState(false)
   const navigate = useNavigate()
+  const location = useLocation()
+  const toast = useRef<Toast>(null)
+  const savingRef = useRef(false)
+  const announcedDeactivation = useRef<string | null>(null)
+
+  useEffect(() => {
+    const state: unknown = location.state
+    const name =
+      typeof state === 'object' && state !== null && 'deactivatedEmployee' in state && typeof state.deactivatedEmployee === 'string'
+        ? state.deactivatedEmployee
+        : null
+
+    if (name === null) {
+      announcedDeactivation.current = null
+      return
+    }
+
+    if (announcedDeactivation.current === name) {
+      return
+    }
+
+    announcedDeactivation.current = name
+    toast.current?.show({
+      severity: 'success',
+      summary: 'Employee deactivated',
+      detail: `${name} is now Deactivated and can no longer be edited.`,
+    })
+    navigate(routePaths.employees, { replace: true, state: null })
+  }, [location.state, navigate])
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -120,6 +158,62 @@ export function EmployeeListPage() {
     setPage(1)
   }
 
+  function confirmDeactivate() {
+    if (savingRef.current || deactivateTarget === null) {
+      return
+    }
+
+    const target = deactivateTarget
+    savingRef.current = true
+    setDeactivating(true)
+
+    deactivateEmployee(String(target.id))
+      .then(() => {
+        toast.current?.show({
+          severity: 'success',
+          summary: 'Employee deactivated',
+          detail: `${formatEmployeeName(target.firstName, target.lastName)} is now Deactivated and can no longer be edited.`,
+        })
+        setDeactivateTarget(null)
+        setResult(null)
+        setLoading(true)
+        setReloadKey((value) => value + 1)
+      })
+      .catch((reason: unknown) => {
+        if (reason instanceof EmployeeNotFoundError) {
+          toast.current?.show({
+            severity: 'error',
+            summary: 'Employee not found',
+            detail: reason.message,
+          })
+          setDeactivateTarget(null)
+          setReloadKey((value) => value + 1)
+          return
+        }
+
+        if (reason instanceof EmployeeAlreadyInactiveError) {
+          toast.current?.show({
+            severity: 'warn',
+            summary: 'Already deactivated',
+            detail: reason.message,
+          })
+          setDeactivateTarget(null)
+          setReloadKey((value) => value + 1)
+          return
+        }
+
+        toast.current?.show({
+          severity: 'error',
+          summary: 'Deactivation failed',
+          detail: readEmployeeError(reason),
+        })
+      })
+      .finally(() => {
+        savingRef.current = false
+        setDeactivating(false)
+      })
+  }
+
   function clearFilters() {
     setSearchInput('')
     setSearch('')
@@ -138,6 +232,18 @@ export function EmployeeListPage() {
 
   return (
     <section className="employee-page">
+      <Toast ref={toast} />
+      <DeactivateEmployeeDialog
+        visible={deactivateTarget !== null}
+        employeeName={
+          deactivateTarget === null
+            ? ''
+            : formatEmployeeName(deactivateTarget.firstName, deactivateTarget.lastName)
+        }
+        saving={deactivating}
+        onHide={() => setDeactivateTarget(null)}
+        onConfirm={confirmDeactivate}
+      />
       <header className="employee-page__header">
         <div>
           <p className="page__eyebrow">HR Manager</p>
@@ -190,6 +296,12 @@ export function EmployeeListPage() {
             sortBy={sortBy}
             sortOrder={sortOrder}
             emptyMessage={emptyMessage}
+            deactivatingId={deactivating && deactivateTarget !== null ? deactivateTarget.id : null}
+            onDeactivate={(employee) => {
+              if (!savingRef.current && employee.employmentStatus !== 'INACTIVE') {
+                setDeactivateTarget(employee)
+              }
+            }}
             onPageChange={(nextPage, nextLimit) => {
               setPage(nextLimit === limit ? nextPage : 1)
               setLimit(nextLimit)

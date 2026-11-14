@@ -2,7 +2,7 @@
   display: grid;
   gap: 1.25rem;
   width: 100%;
-  max-width: 76rem;
+   max-width: 100%;
 }
 
 .dashboard__intro p:last-child {

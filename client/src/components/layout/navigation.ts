@@ -21,6 +21,10 @@ export function resolvePageTitle(pathname: string): string {
     return 'New employee'
   }
 
+  if (/^\/employees\/[^/]+\/edit$/.test(pathname)) {
+    return 'Edit employee'
+  }
+
   if (pathname.startsWith(`${routePaths.employees}/`)) {
     return 'Employee profile'
   }

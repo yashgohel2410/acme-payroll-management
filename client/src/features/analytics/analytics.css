@@ -1,0 +1,146 @@
+.analytics-chart {
+  width: 100%;
+  height: 22rem;
+  min-width: 0;
+  overflow-x: auto;
+}
+
+.analytics-salary__charts .analytics-chart--salary {
+  height: auto;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.analytics-chart__plot {
+  width: 100%;
+  height: 100%;
+  min-width: 20rem;
+}
+
+.analytics-zero,
+.analytics-salary__note {
+  margin: 0.75rem 0 0;
+  color: var(--color-text-muted);
+  font-size: 0.85rem;
+}
+
+.analytics-salary {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(16rem, 0.8fr);
+  gap: 1.25rem;
+  align-items: stretch;
+}
+
+.analytics-salary__charts,
+.analytics-salary__totals {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.analytics-salary__charts {
+  gap: 1rem;
+  height: 100%;
+}
+
+.analytics-salary__chart {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.analytics-salary__chart .analytics-chart {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.analytics-salary > * {
+  min-width: 0;
+}
+
+.analytics-salary h3 {
+  margin: 0 0 0.75rem;
+  font-size: 0.95rem;
+}
+
+.analytics-salary__note {
+  margin-top: 0;
+  margin-bottom: 0.75rem;
+}
+
+.analytics-currencies {
+  display: grid;
+  flex: 1 1 auto;
+  gap: 0.75rem;
+  align-content: stretch;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.analytics-currency {
+  min-width: 0;
+  padding: 0.85rem 0.95rem;
+  border: 1px solid var(--color-border);
+  border-radius: 0.7rem;
+  background: #f7fafc;
+}
+
+.analytics-currency__code {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+
+.analytics-currency__swatch {
+  width: 0.7rem;
+  height: 0.7rem;
+  border-radius: 999px;
+}
+
+.analytics-currency__metric {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin: 0.35rem 0 0;
+}
+
+.analytics-currency__metric span {
+  color: var(--color-text-muted);
+}
+
+.analytics-currency__metric strong {
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+@media (max-width: 900px) {
+  .analytics-salary {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 720px) {
+  .analytics-chart {
+    height: 18rem;
+  }
+
+  .analytics-salary__chart .analytics-chart {
+    height: 16rem;
+    flex: none;
+  }
+
+  .analytics-currency__metric {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 0.1rem;
+  }
+
+  .analytics-currency__metric strong {
+    text-align: left;
+  }
+}

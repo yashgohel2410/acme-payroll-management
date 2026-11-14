@@ -5,11 +5,29 @@ export function formatEmployeeName(firstName: string, lastName: string): string 
 }
 
 export function formatEmploymentStatus(status: string): string {
+  if (status === 'INACTIVE') {
+    return 'Deactivated'
+  }
+
   return status
     .toLowerCase()
     .split('_')
     .map((part) => (part.length === 0 ? part : `${part.charAt(0).toUpperCase()}${part.slice(1)}`))
     .join(' ')
+}
+
+export function formatIsoDate(value: string): string {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) {
+    return value
+  }
+
+  return new Intl.DateTimeFormat('en-US', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    timeZone: 'UTC',
+  }).format(date)
 }
 
 export function formatCurrentSalary(

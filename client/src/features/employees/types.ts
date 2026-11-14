@@ -76,3 +76,76 @@ export type NamedOption = {
   name: string
   detail?: string
 }
+
+export type EmployeeSalary = {
+  id: number
+  amount: number
+  effectiveFrom: string
+  effectiveTo: string | null
+  currency: EmployeeCurrency
+}
+
+export type EmployeeDetails = Omit<ListedEmployee, 'currentSalary'> & {
+  currentSalary: EmployeeSalary | null
+  salaryHistory: EmployeeSalary[]
+}
+
+export type CreateEmployeePayload = {
+  employeeCode: string
+  firstName: string
+  lastName: string
+  email: string
+  phone?: string
+  designation: string
+  dateOfJoining: string
+  employmentStatus: EmploymentStatus
+  departmentId: number
+  countryId: number
+  amount: number
+  currencyId: number
+  effectiveFrom: string
+}
+
+export type UpdateEmployeePayload = {
+  firstName: string
+  lastName: string
+  email: string
+  phone: string | null
+  designation: string
+  departmentId: number
+  countryId: number
+  employmentStatus: EmploymentStatus
+}
+
+export type EmployeeEditValues = {
+  firstName: string
+  lastName: string
+  email: string
+  phone: string
+  designation: string
+  departmentId: number | null
+  countryId: number | null
+  employmentStatus: EmploymentStatus
+}
+
+export type EmployeeFormValues = {
+  employeeCode: string
+  firstName: string
+  lastName: string
+  email: string
+  phone: string
+  designation: string
+  dateOfJoining: string
+  departmentId: number | null
+  countryId: number | null
+  amount: string
+  currencyId: number | null
+  effectiveFrom: string
+}
+
+export type EmployeeReferenceOptions = {
+  departments: NamedOption[]
+  countries: NamedOption[]
+  currencies: EmployeeCurrency[]
+  nextEmployeeCode: string
+}

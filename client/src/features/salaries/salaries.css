@@ -1,0 +1,29 @@
+.salary-page__search {
+  max-width: 28rem;
+}
+
+.salary-page__search .p-iconfield,
+.salary-page__search .p-inputtext {
+  width: 100%;
+}
+
+.salary-page__table .p-datatable-table,
+.salary-page .dashboard-panel .p-datatable-table {
+  min-width: 52rem;
+}
+
+.salary-page .p-datatable-thead > tr > th,
+.salary-page .p-datatable-tbody > tr > td {
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+.salary-revision {
+  margin-top: 0.75rem;
+}
+
+@media (max-width: 720px) {
+  .salary-page__search {
+    max-width: none;
+  }
+}

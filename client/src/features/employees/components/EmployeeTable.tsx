@@ -1,3 +1,4 @@
+import { Button } from 'primereact/button'
 import { Column } from 'primereact/column'
 import { DataTable, type DataTableStateEvent } from 'primereact/datatable'
 import { Link } from 'react-router-dom'
@@ -13,8 +14,10 @@ type EmployeeTableProps = {
   sortBy: EmployeeSortField
   sortOrder: EmployeeSortOrder
   emptyMessage: string
+  deactivatingId: number | null
   onPageChange: (page: number, limit: number) => void
   onSortChange: (sortBy: EmployeeSortField, sortOrder: EmployeeSortOrder) => void
+  onDeactivate: (employee: ListedEmployee) => void
 }
 
 const pageSizes = [10, 20, 50, 100]
@@ -31,14 +34,6 @@ function isSortField(value: string): value is EmployeeSortField {
   )
 }
 
-function renderActions(row: ListedEmployee) {
-  return (
-    <Link className="employee-table__action" to={`/employees/${row.id}`}>
-      Details
-    </Link>
-  )
-}
-
 export function EmployeeTable({
   employees,
   loading,
@@ -48,8 +43,10 @@ export function EmployeeTable({
   sortBy,
   sortOrder,
   emptyMessage,
+  deactivatingId,
   onPageChange,
   onSortChange,
+  onDeactivate,
 }: EmployeeTableProps) {
   function handlePage(event: DataTableStateEvent) {
     const nextLimit = event.rows
@@ -112,7 +109,26 @@ export function EmployeeTable({
         )}
       />
       <Column header="Current salary" body={(employee: ListedEmployee) => formatCurrentSalary(employee.currentSalary)} />
-      <Column header="Actions" body={renderActions} />
+      <Column
+        header="Actions"
+        body={(employee: ListedEmployee) => (
+          <div className="employee-table__actions">
+            <Link className="employee-table__action" to={`/employees/${employee.id}`}>
+              Details
+            </Link>
+            <Button
+              type="button"
+              label="Deactivate"
+              icon="pi pi-ban"
+              text
+              severity="danger"
+              size="small"
+              disabled={employee.employmentStatus === 'INACTIVE' || deactivatingId !== null}
+              onClick={() => onDeactivate(employee)}
+            />
+          </div>
+        )}
+      />
     </DataTable>
   )
 }

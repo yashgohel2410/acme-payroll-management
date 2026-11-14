@@ -1,5 +1,5 @@
-import axios from 'axios'
 import { apiClient } from '../../../services/api/httpClient.ts'
+import { readApiErrorMessage as readSharedApiErrorMessage } from '../../../services/api/apiError.ts'
 import type {
   CountryDistribution,
   DashboardData,
@@ -58,7 +58,7 @@ function readArray(value: unknown, label: string): unknown[] {
   return data
 }
 
-function parseSummary(value: unknown): DashboardSummary {
+export function parseSummary(value: unknown): DashboardSummary {
   const data = readRecord(readData(value, 'Dashboard summary'), 'Dashboard summary')
 
   return {
@@ -71,7 +71,7 @@ function parseSummary(value: unknown): DashboardSummary {
   }
 }
 
-function parseDepartments(value: unknown): DepartmentDistribution[] {
+export function parseDepartments(value: unknown): DepartmentDistribution[] {
   return readArray(value, 'Department distribution').map((item) => {
     const record = readRecord(item, 'Department distribution')
     return {
@@ -81,7 +81,7 @@ function parseDepartments(value: unknown): DepartmentDistribution[] {
   })
 }
 
-function parseCountries(value: unknown): CountryDistribution[] {
+export function parseCountries(value: unknown): CountryDistribution[] {
   return readArray(value, 'Country distribution').map((item) => {
     const record = readRecord(item, 'Country distribution')
     return {
@@ -92,7 +92,7 @@ function parseCountries(value: unknown): CountryDistribution[] {
   })
 }
 
-function parseSalaries(value: unknown): SalaryDistribution[] {
+export function parseSalaries(value: unknown): SalaryDistribution[] {
   return readArray(value, 'Salary distribution').map((item) => {
     const record = readRecord(item, 'Salary distribution')
     return {
@@ -113,7 +113,7 @@ function parseCurrency(value: unknown, label: string): RevisionCurrency {
   }
 }
 
-function parseRevisions(value: unknown): RecentRevision[] {
+export function parseRevisions(value: unknown): RecentRevision[] {
   return readArray(value, 'Recent revisions').map((item) => {
     const record = readRecord(item, 'Recent revisions')
     const employee = readRecord(record.employee, 'Recent revisions')
@@ -135,26 +135,11 @@ function parseRevisions(value: unknown): RecentRevision[] {
   })
 }
 
-export function readApiErrorMessage(error: unknown): string {
-  if (axios.isAxiosError(error)) {
-    const data: unknown = error.response?.data
-    if (typeof data === 'object' && data !== null && 'error' in data) {
-      const body: unknown = data.error
-      if (typeof body === 'object' && body !== null && 'message' in body && typeof body.message === 'string') {
-        return body.message
-      }
-    }
-
-    if (error.message.trim().length > 0) {
-      return error.message
-    }
-  }
-
-  if (error instanceof Error && error.message.trim().length > 0) {
-    return error.message
-  }
-
-  return 'The dashboard could not be loaded.'
+export function readApiErrorMessage(
+  error: unknown,
+  fallback = 'The dashboard could not be loaded.',
+): string {
+  return readSharedApiErrorMessage(error, fallback)
 }
 
 export async function loadDashboard(): Promise<DashboardData> {

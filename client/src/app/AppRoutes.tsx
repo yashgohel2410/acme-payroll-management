@@ -3,6 +3,7 @@ import { AppLayout } from '../components/layout/AppLayout.tsx'
 import { PlaceholderPage } from '../components/ui/PlaceholderPage.tsx'
 import { AnalyticsPage } from '../features/analytics/pages/AnalyticsPage.tsx'
 import { DashboardPage } from '../features/dashboard/pages/DashboardPage.tsx'
+import { EditEmployeePage } from '../features/employees/pages/EditEmployeePage.tsx'
 import { EmployeeDetailPage } from '../features/employees/pages/EmployeeDetailPage.tsx'
 import { EmployeeListPage } from '../features/employees/pages/EmployeeListPage.tsx'
 import { NewEmployeePage } from '../features/employees/pages/NewEmployeePage.tsx'
@@ -18,7 +19,8 @@ export function AppRoutes() {
         <Route path={routePaths.dashboard} element={<DashboardPage />} />
         <Route path={routePaths.newEmployee} element={<NewEmployeePage />} />
         <Route path={routePaths.employees} element={<EmployeeListPage />} />
-        <Route path="/employees/:id" element={<EmployeeDetailPage />} />
+        <Route path={routePaths.editEmployee} element={<EditEmployeePage />} />
+        <Route path={routePaths.employee} element={<EmployeeDetailPage />} />
         <Route path={routePaths.salaryHistory} element={<SalaryHistoryPage />} />
         <Route path={routePaths.salaries} element={<SalariesPage />} />
         <Route path={routePaths.analytics} element={<AnalyticsPage />} />
