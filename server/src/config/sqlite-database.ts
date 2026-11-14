@@ -1,6 +1,7 @@
-import { accessSync, constants, mkdirSync } from 'node:fs'
+import { accessSync, constants, existsSync, mkdirSync, unlinkSync } from 'node:fs'
 import { dirname, isAbsolute, join, resolve } from 'node:path'
 import { tmpdir } from 'node:os'
+import { DatabaseSync } from 'node:sqlite'
 import { fileURLToPath } from 'node:url'
 
 const serverRoot = fileURLToPath(new URL('../..', import.meta.url))
@@ -53,6 +54,53 @@ function toFileUrl(filePath: string, query: string): string {
   return `file:${filePath.replaceAll('\\', '/')}${query}`
 }
 
+function discardFailedEmptyDatabase(filePath: string): void {
+  if (!existsSync(filePath)) {
+    return
+  }
+
+  let database: DatabaseSync | undefined
+  let shouldRemove = false
+  try {
+    database = new DatabaseSync(filePath, { readOnly: true })
+    const migrationTable = database
+      .prepare("SELECT 1 AS present FROM sqlite_master WHERE type = 'table' AND name = '_prisma_migrations'")
+      .get()
+    if (migrationTable === undefined) {
+      return
+    }
+
+    const failedMigration = database
+      .prepare(
+        'SELECT 1 AS present FROM _prisma_migrations WHERE finished_at IS NULL AND rolled_back_at IS NULL LIMIT 1',
+      )
+      .get()
+    const employeeTable = database
+      .prepare("SELECT 1 AS present FROM sqlite_master WHERE type = 'table' AND name = 'Employee'")
+      .get()
+    shouldRemove = failedMigration !== undefined && employeeTable === undefined
+  } catch (error: unknown) {
+    if (!isUnavailableDirectoryError(error)) {
+      console.warn(`Could not inspect SQLite database at ${filePath}.`, error)
+    }
+    return
+  } finally {
+    database?.close()
+  }
+
+  if (!shouldRemove) {
+    return
+  }
+
+  for (const suffix of ['', '-journal', '-wal', '-shm']) {
+    const candidate = `${filePath}${suffix}`
+    if (existsSync(candidate)) {
+      unlinkSync(candidate)
+    }
+  }
+  console.warn(`Removed the empty SQLite database after a failed migration: ${filePath}`)
+}
+
 function canUseDirectory(directory: string): boolean {
   try {
     mkdirSync(directory, { recursive: true })
@@ -74,6 +122,7 @@ export function ensureSqliteDatabaseUrl(): string | undefined {
 
   const { pathPart, query } = splitFileUrl(databaseUrl)
   const filePath = filePathFromUrl(pathPart)
+  discardFailedEmptyDatabase(filePath)
 
   if (canUseDirectory(dirname(filePath))) {
     const resolved = toFileUrl(filePath, query)
@@ -83,7 +132,9 @@ export function ensureSqliteDatabaseUrl(): string | undefined {
 
   const fallbackDirectory = join(tmpdir(), 'acme-payroll')
   mkdirSync(fallbackDirectory, { recursive: true })
-  const fallback = toFileUrl(join(fallbackDirectory, 'payroll.db'), query)
+  const fallbackPath = join(fallbackDirectory, 'payroll.db')
+  discardFailedEmptyDatabase(fallbackPath)
+  const fallback = toFileUrl(fallbackPath, query)
   console.warn(
     `SQLite path is not writable (${filePath}). Using ${fallback}. Mount a disk and set DATABASE_URL to a file on that disk to keep payroll data.`,
   )

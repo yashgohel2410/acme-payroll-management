@@ -1,64 +1,3 @@
-/*
-  Warnings:
-
-  - You are about to drop the `Attendance` table. If the table is not empty, all the data it contains will be lost.
-  - You are about to drop the `Leave` table. If the table is not empty, all the data it contains will be lost.
-  - You are about to drop the `Payroll` table. If the table is not empty, all the data it contains will be lost.
-  - You are about to drop the `User` table. If the table is not empty, all the data it contains will be lost.
-  - You are about to drop the column `createdAt` on the `Department` table. All the data in the column will be lost.
-  - You are about to drop the column `description` on the `Department` table. All the data in the column will be lost.
-  - You are about to drop the column `updatedAt` on the `Department` table. All the data in the column will be lost.
-  - You are about to drop the column `address` on the `Employee` table. All the data in the column will be lost.
-  - You are about to drop the column `baseSalary` on the `Employee` table. All the data in the column will be lost.
-  - You are about to drop the column `createdAt` on the `Employee` table. All the data in the column will be lost.
-  - You are about to drop the column `dateOfBirth` on the `Employee` table. All the data in the column will be lost.
-  - You are about to drop the column `joiningDate` on the `Employee` table. All the data in the column will be lost.
-  - You are about to drop the column `updatedAt` on the `Employee` table. All the data in the column will be lost.
-  - Added the required column `countryId` to the `Employee` table without a default value. This is not possible if the table is not empty.
-  - Added the required column `dateOfJoining` to the `Employee` table without a default value. This is not possible if the table is not empty.
-
-*/
--- DropIndex
-DROP INDEX "Attendance_employeeId_date_key";
-
--- DropIndex
-DROP INDEX "Attendance_date_idx";
-
--- DropIndex
-DROP INDEX "Leave_employeeId_status_idx";
-
--- DropIndex
-DROP INDEX "Payroll_employeeId_month_year_key";
-
--- DropIndex
-DROP INDEX "Payroll_year_month_idx";
-
--- DropIndex
-DROP INDEX "User_employeeId_key";
-
--- DropIndex
-DROP INDEX "User_email_key";
-
--- DropTable
-PRAGMA foreign_keys=off;
-DROP TABLE "Attendance";
-PRAGMA foreign_keys=on;
-
--- DropTable
-PRAGMA foreign_keys=off;
-DROP TABLE "Leave";
-PRAGMA foreign_keys=on;
-
--- DropTable
-PRAGMA foreign_keys=off;
-DROP TABLE "Payroll";
-PRAGMA foreign_keys=on;
-
--- DropTable
-PRAGMA foreign_keys=off;
-DROP TABLE "User";
-PRAGMA foreign_keys=on;
-
 -- CreateTable
 CREATE TABLE "Country" (
     "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
@@ -67,11 +6,34 @@ CREATE TABLE "Country" (
 );
 
 -- CreateTable
+CREATE TABLE "Department" (
+    "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    "name" TEXT NOT NULL
+);
+
+-- CreateTable
 CREATE TABLE "Currency" (
     "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
     "code" TEXT NOT NULL,
     "name" TEXT NOT NULL,
     "minorUnitDigits" INTEGER NOT NULL DEFAULT 2
+);
+
+-- CreateTable
+CREATE TABLE "Employee" (
+    "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    "employeeCode" TEXT NOT NULL,
+    "firstName" TEXT NOT NULL,
+    "lastName" TEXT NOT NULL,
+    "email" TEXT NOT NULL,
+    "phone" TEXT,
+    "dateOfJoining" DATETIME NOT NULL,
+    "designation" TEXT NOT NULL,
+    "employmentStatus" TEXT NOT NULL DEFAULT 'ACTIVE',
+    "countryId" INTEGER NOT NULL,
+    "departmentId" INTEGER NOT NULL,
+    CONSTRAINT "Employee_countryId_fkey" FOREIGN KEY ("countryId") REFERENCES "Country" ("id") ON DELETE RESTRICT ON UPDATE CASCADE,
+    CONSTRAINT "Employee_departmentId_fkey" FOREIGN KEY ("departmentId") REFERENCES "Department" ("id") ON DELETE RESTRICT ON UPDATE CASCADE
 );
 
 -- CreateTable
@@ -103,46 +65,6 @@ CREATE TABLE "SalaryRevision" (
     CONSTRAINT "SalaryRevision_updatedCurrencyId_fkey" FOREIGN KEY ("updatedCurrencyId") REFERENCES "Currency" ("id") ON DELETE RESTRICT ON UPDATE CASCADE
 );
 
--- RedefineTables
-PRAGMA defer_foreign_keys=ON;
-PRAGMA foreign_keys=OFF;
-CREATE TABLE "new_Department" (
-    "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
-    "name" TEXT NOT NULL
-);
-INSERT INTO "new_Department" ("id", "name") SELECT "id", "name" FROM "Department";
-DROP TABLE "Department";
-ALTER TABLE "new_Department" RENAME TO "Department";
-CREATE UNIQUE INDEX "Department_name_key" ON "Department"("name");
-CREATE TABLE "new_Employee" (
-    "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
-    "employeeCode" TEXT NOT NULL,
-    "firstName" TEXT NOT NULL,
-    "lastName" TEXT NOT NULL,
-    "email" TEXT NOT NULL,
-    "phone" TEXT,
-    "dateOfJoining" DATETIME NOT NULL,
-    "designation" TEXT NOT NULL,
-    "employmentStatus" TEXT NOT NULL DEFAULT 'ACTIVE',
-    "countryId" INTEGER NOT NULL,
-    "departmentId" INTEGER NOT NULL,
-    CONSTRAINT "Employee_countryId_fkey" FOREIGN KEY ("countryId") REFERENCES "Country" ("id") ON DELETE RESTRICT ON UPDATE CASCADE,
-    CONSTRAINT "Employee_departmentId_fkey" FOREIGN KEY ("departmentId") REFERENCES "Department" ("id") ON DELETE RESTRICT ON UPDATE CASCADE
-);
-INSERT INTO "new_Employee" ("departmentId", "designation", "email", "employeeCode", "employmentStatus", "firstName", "id", "lastName", "phone") SELECT "departmentId", "designation", "email", "employeeCode", "employmentStatus", "firstName", "id", "lastName", "phone" FROM "Employee";
-DROP TABLE "Employee";
-ALTER TABLE "new_Employee" RENAME TO "Employee";
-CREATE UNIQUE INDEX "Employee_employeeCode_key" ON "Employee"("employeeCode");
-CREATE UNIQUE INDEX "Employee_email_key" ON "Employee"("email");
-CREATE INDEX "Employee_lastName_firstName_idx" ON "Employee"("lastName", "firstName");
-CREATE INDEX "Employee_firstName_idx" ON "Employee"("firstName");
-CREATE INDEX "Employee_departmentId_idx" ON "Employee"("departmentId");
-CREATE INDEX "Employee_countryId_idx" ON "Employee"("countryId");
-CREATE INDEX "Employee_employmentStatus_idx" ON "Employee"("employmentStatus");
-CREATE INDEX "Employee_designation_idx" ON "Employee"("designation");
-PRAGMA foreign_keys=ON;
-PRAGMA defer_foreign_keys=OFF;
-
 -- CreateIndex
 CREATE UNIQUE INDEX "Country_isoCode_key" ON "Country"("isoCode");
 
@@ -150,7 +72,34 @@ CREATE UNIQUE INDEX "Country_isoCode_key" ON "Country"("isoCode");
 CREATE INDEX "Country_name_idx" ON "Country"("name");
 
 -- CreateIndex
+CREATE UNIQUE INDEX "Department_name_key" ON "Department"("name");
+
+-- CreateIndex
 CREATE UNIQUE INDEX "Currency_code_key" ON "Currency"("code");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "Employee_employeeCode_key" ON "Employee"("employeeCode");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "Employee_email_key" ON "Employee"("email");
+
+-- CreateIndex
+CREATE INDEX "Employee_lastName_firstName_idx" ON "Employee"("lastName", "firstName");
+
+-- CreateIndex
+CREATE INDEX "Employee_firstName_idx" ON "Employee"("firstName");
+
+-- CreateIndex
+CREATE INDEX "Employee_departmentId_idx" ON "Employee"("departmentId");
+
+-- CreateIndex
+CREATE INDEX "Employee_countryId_idx" ON "Employee"("countryId");
+
+-- CreateIndex
+CREATE INDEX "Employee_employmentStatus_idx" ON "Employee"("employmentStatus");
+
+-- CreateIndex
+CREATE INDEX "Employee_designation_idx" ON "Employee"("designation");
 
 -- CreateIndex
 CREATE INDEX "Salary_employeeId_idx" ON "Salary"("employeeId");
